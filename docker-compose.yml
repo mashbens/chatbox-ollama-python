@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  chatbox:
+    build: .
+    container_name: chatbox-app
+    volumes:
+      - ./docs:/app/docs
+      - ./db:/app/db
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

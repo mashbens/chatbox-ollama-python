@@ -1,0 +1,8 @@
+langchain==0.2.17
+langchain-community==0.2.19
+langchain-huggingface
+chromadb
+torch
+pypdf
+uvicorn
+fastapi
