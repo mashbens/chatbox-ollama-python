@@ -1,0 +1,31 @@
+version: '3'
+services:
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ai-network
+
+  chatbox:
+    build: .
+    container_name: chatbox
+    depends_on:
+      - ollama
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./db:/app/db   # supaya Chroma db persistent
+    networks:
+      - ai-network
+    restart: on-failure
+
+volumes:
+  ollama_data:
+
+networks:
+  ai-network:
+    driver: bridge

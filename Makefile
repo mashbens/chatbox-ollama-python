@@ -1,22 +1,37 @@
-# Build docker image
+# Nama layanan
+SERVICE=chatbox
+DOCKER_COMPOSE=docker-compose
+
+.PHONY: build up down logs clean restart
+
+# Membangun image Docker
 build:
-	docker compose build
+	$(DOCKER_COMPOSE) build
 
-# Jalankan API (default CMD)
+# Menjalankan seluruh layanan
 up:
-	docker compose up -d
+	$(DOCKER_COMPOSE) up -d
 
-# Hentikan container
+# Menghentikan semua container
 down:
-	docker compose down
+	$(DOCKER_COMPOSE) down
 
-# Jalankan PDF ingestion (sekali saja, ganti sesuai nama file)
-ingest:
-	docker compose run --rm chatbox python app.py --pdf ./docs/BUMN.pdf
-
-# Lihat log container
+# Melihat log dari layanan chatbox (bisa diganti dengan ollama jika perlu)
 logs:
-	docker compose logs -f
+	$(DOCKER_COMPOSE) logs -f $(SERVICE)
 
-# Rebuild dan restart
-reup: down build up
+# Membersihkan volume dan cache
+clean:
+	$(DOCKER_COMPOSE) down -v
+	rm -rf db/
+
+# Restart service (down dan up ulang)
+restart: down up
+
+# Jalankan hanya service chatbox
+run-chatbox:
+	docker-compose run --rm $(SERVICE)
+
+# Masuk ke shell dalam container chatbox
+shell:
+	docker exec -it chatbox /bin/bash

@@ -1,80 +1,39 @@
-# app.py
-
-import os
-import torch
-from fastapi import FastAPI
-from pydantic import BaseModel
-from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from flask import Flask, request, jsonify, render_template_string
+import time
 from langchain_community.vectorstores import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.llms import Ollama
 from langchain.chains import RetrievalQA
 
-# ---------- Embedding Setup ----------
-def ingest_pdf(filepath: str):
-    if not os.path.exists(filepath):
-        print(f"❌ File tidak ditemukan: {filepath}")
-        return
+app = Flask(__name__)
 
-    print(f"📄 Memuat dokumen dari {filepath}")
-    loader = PyPDFLoader(filepath)
-    docs = loader.load()
-
-    print(f"✂️ Memotong dokumen...")
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    docs_split = splitter.split_documents(docs)
-
-    print(f"🧠 Membuat embedding dan menyimpan ke db/...")
+def get_qa_chain():
     embedding = HuggingFaceEmbeddings(
         model_name="BAAI/bge-m3",
-        model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"},
+        model_kwargs={"device": "cpu"},
         encode_kwargs={"normalize_embeddings": True}
     )
+    vectordb = Chroma(persist_directory="db/", embedding_function=embedding)
+    retriever = vectordb.as_retriever()
+    llm = Ollama(model="pnm-mistral", base_url="http://ollama:11434")  # Pastikan sudah pull model
+    qa = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
+    return qa
 
-    vectordb = Chroma.from_documents(docs_split, embedding, persist_directory="db/")
-    vectordb.persist()
-    print("✅ Embedding selesai.")
+qa_chain = get_qa_chain()
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json()
+    query = data.get("message", "")
+    start = time.time()
+    try:
+        answer = qa_chain.run(query)
+        duration = time.time() - start
+        return jsonify({
+            "answer": answer,
+            "time": f"{duration:.2f} detik"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-# ---------- FastAPI Chat Setup ----------
-embedding = HuggingFaceEmbeddings(
-    model_name="BAAI/bge-m3",
-    model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"},
-    encode_kwargs={"normalize_embeddings": True}
-)
-
-vectordb = Chroma(persist_directory="db/", embedding_function=embedding)
-retriever = vectordb.as_retriever()
-llm = Ollama(model="mistral")
-qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
-
-app = FastAPI()
-
-class QueryRequest(BaseModel):
-    question: str
-
-@app.get("/")
-def root():
-    return {"message": "QA API aktif 🚀"}
-
-@app.post("/ask")
-def ask(req: QueryRequest):
-    answer = qa_chain.run(req.question)
-    return {"answer": answer}
-
-# ---------- Mode CLI atau API ----------
 if __name__ == "__main__":
-    import argparse
-    import uvicorn
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--pdf", help="Path PDF untuk ingest")
-    parser.add_argument("--api", action="store_true", help="Jalankan sebagai API")
-    args = parser.parse_args()
-
-    if args.pdf:
-        ingest_pdf(args.pdf)
-    elif args.api:
-        uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
-    else:
-        print("❗ Gunakan --pdf [path] untuk ingest atau --api untuk jalankan API")
+    app.run(debug=True, host="0.0.0.0", port=5000)
