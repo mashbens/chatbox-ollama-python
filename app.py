@@ -20,17 +20,17 @@ def get_qa_chain():
     return qa
 
 qa_chain = get_qa_chain()
-@app.route("/chat", methods=["POST"])
+@app.route("/ask", methods=["POST"])
 def chat():
     data = request.get_json()
-    query = data.get("message", "")
-    start = time.time()
+    query = data.get("question", "")
+    # start = time.time()
     try:
         answer = qa_chain.run(query)
-        duration = time.time() - start
+        # duration = time.time() - start
         return jsonify({
-            "answer": answer,
-            "time": f"{duration:.2f} detik"
+            "response": answer,
+            # "time": f"{duration:.2f} detik"
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

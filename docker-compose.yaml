@@ -16,7 +16,7 @@ services:
     depends_on:
       - ollama
     ports:
-      - "5000:5000"
+      - "31131:5000"
     volumes:
       - ./db:/app/db   # supaya Chroma db persistent
     networks:

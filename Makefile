@@ -35,3 +35,7 @@ run-chatbox:
 # Masuk ke shell dalam container chatbox
 shell:
 	docker exec -it chatbox /bin/bash
+
+# Masuk ke shell dalam container ollama
+shell-ollama:
+	docker exec -it ollama /bin/bash

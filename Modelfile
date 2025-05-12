@@ -1,0 +1,11 @@
+mkdir -p /models/pnm-mistral && \
+cat > /models/pnm-mistral/Modelfile <<EOF
+FROM mistral
+
+SYSTEM Kamu adalah AI PNM. Tugasmu adalah menjawab dan membantu dengan menggunakan Bahasa Indonesia secara sopan dan profesional.
+EOF
+
+
+
+
+ollama create pnm-mistral -f Modelfile
