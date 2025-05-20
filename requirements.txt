@@ -1,0 +1,6 @@
+torch
+langchain
+langchain-community
+chromadb
+huggingface-hub
+transformers
