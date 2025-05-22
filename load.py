@@ -6,10 +6,14 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 
 
-def ingest_pdfs(filepaths: list):
+def ingest_pdfs(file_list: list[dict]):
     all_docs = []
 
-    for filepath in filepaths:
+    for file in file_list:
+        filepath = file["path"]
+        module = file["module"]
+        category = file.get("category", "other")
+
         if not os.path.exists(filepath):
             print(f"❌ File tidak ditemukan: {filepath}")
             continue
@@ -18,18 +22,23 @@ def ingest_pdfs(filepaths: list):
         try:
             loader = PyPDFLoader(filepath)
             docs = loader.load()
+
             for doc in docs:
-                doc.metadata["source"] = os.path.basename(filepath)  # Simpan nama file
+                doc.metadata["source"] = f"{module}.pdf"     # Untuk filter di API
+                doc.metadata["filepath"] = filepath
+                doc.metadata["category"] = category
+                doc.metadata["module"] = module              # Simpan juga tanpa ".pdf" kalau butuh
+
             all_docs.extend(docs)
         except Exception as e:
-            print(f"❌ Terjadi kesalahan saat memuat file PDF {filepath}: {e}")
+            print(f"❌ Gagal memuat {filepath}: {e}")
             continue
 
     if not all_docs:
-        print("❌ Tidak ada dokumen yang dimuat.")
+        print("❌ Tidak ada dokumen yang berhasil dimuat.")
         return
 
-    print("✂️ Memotong dokumen jadi chunks...")
+    print("✂️ Memotong dokumen menjadi chunks...")
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     docs_split = splitter.split_documents(all_docs)
 
@@ -41,7 +50,7 @@ def ingest_pdfs(filepaths: list):
             encode_kwargs={"normalize_embeddings": True}
         )
     except Exception as e:
-        print(f"❌ Gagal memuat embedding model: {e}")
+        print(f"❌ Gagal memuat model embedding: {e}")
         return
 
     print("💾 Menyimpan ke ChromaDB (append jika sudah ada)...")
@@ -53,9 +62,21 @@ def ingest_pdfs(filepaths: list):
         print(f"❌ Gagal menyimpan ke ChromaDB: {e}")
         return
 
-    print("✅ Proses selesai. Embedding disimpan ke 'db/'.")
+    print("✅ Sukses! Embedding disimpan ke folder 'db/'.")
 
 
 if __name__ == "__main__":
-    filepaths = ["./docs/AquaCoolDispenser.pdf", "./docs/SmartCleanVacuum.pdf"]  # Tambah lebih banyak PDF di sini
-    ingest_pdfs(filepaths)
+    file_list = [
+        # {
+        #     "path": "./docs/PPM.pdf",
+        #     "module": "mekaar",
+        #     "category": "mekaar"
+        # }
+        {
+            "path": "./docs/PPU.pdf",
+            "module": "ulam",
+            "category": "ulam"
+        }
+        # Tambahkan file lainnya di sini
+    ]
+    ingest_pdfs(file_list)

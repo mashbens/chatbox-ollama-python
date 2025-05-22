@@ -4,3 +4,5 @@ langchain-community
 chromadb
 huggingface-hub
 transformers
+flask
+sentence-transformers`
