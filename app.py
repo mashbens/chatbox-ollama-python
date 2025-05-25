@@ -1,8 +1,8 @@
 from flask import Flask, request, jsonify
 from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.llms import Ollama
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_ollama import OllamaLLM
 
 app = Flask(__name__)
 
@@ -25,15 +25,19 @@ def chat():
         return jsonify({"error": "Parameter 'question' tidak boleh kosong."}), 400
 
     try:
+        # Load vector DB & model
         vectordb = load_vectordb()
-        llm = Ollama(model="pnm-mistral", base_url="http://localhost:11434")
+        llm = OllamaLLM(model="pnm-mistral", base_url="http://ollama:11434")
+        # llm = OllamaLLM(model="pnm-mistral", base_url="http://localhost:11434")
 
+        # Set filter jika ada modul
         retriever_kwargs = {"k": 5}
         if module:
             retriever_kwargs["filter"] = {"source": f"{module}.pdf"}
 
         retriever = vectordb.as_retriever(search_kwargs=retriever_kwargs)
 
+        # QA chain
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             retriever=retriever,
@@ -42,11 +46,14 @@ def chat():
 
         result = qa_chain.invoke({"query": question})
         jawaban = result["result"]
+        sumber_docs = result.get("source_documents", [])
+
+        sumber_list = list({doc.metadata.get("source", "unknown") for doc in sumber_docs})
 
         return jsonify({
             "response": {
                 "jawaban": jawaban.strip(),
-                "sumber": module if module else "general"
+                "sumber": sumber_list if sumber_list else ["general"]
             }
         })
 
@@ -54,4 +61,4 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=31133)
+    app.run(debug=True, host="0.0.0.0", port=5000)

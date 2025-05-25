@@ -1,8 +1,9 @@
-torch
-langchain
-langchain-community
-chromadb
-huggingface-hub
-transformers
 flask
-sentence-transformers`
+langchain
+langchain-chroma
+langchain-huggingface
+langchain-community  # jika perlu untuk RetrievalQA
+torch
+transformers
+chromadb
+langchain-ollama
