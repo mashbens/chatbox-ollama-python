@@ -67,15 +67,15 @@ def ingest_pdfs(file_list: list[dict]):
 
 if __name__ == "__main__":
     file_list = [
-        # {
-        #     "path": "./docs/PPM.pdf",
-        #     "module": "mekaar",
-        #     "category": "mekaar"
-        # }
         {
-            "path": "./docs/PPU.pdf",
-            "module": "ulam",
-            "category": "ulam"
+            "path": "./docs/PPM.pdf",
+            "module": "mekaar",
+            "category": "mekaar"
+        },
+        {
+            "path": "./docs/SmartCleanVacuum.pdf",
+            "module": "vacuum",
+            "category": "vacuum"
         }
         # Tambahkan file lainnya di sini
     ]

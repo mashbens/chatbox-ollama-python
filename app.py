@@ -31,7 +31,7 @@ def chat():
 
         # Load vector DB & model
         vectordb = load_vectordb()
-        llm = OllamaLLM(model="pnm-mistral", base_url="http://ollama:11434")
+        llm = OllamaLLM(model="pnm-mistral", base_url="http://localhost:11434")
 
         # Set filter jika ada modul
         retriever_kwargs = {"k": 5}
