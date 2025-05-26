@@ -1,21 +1,27 @@
-FROM python:3.11-slim
-
-# Set environment
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Set working directory
-WORKDIR /app
+FROM python:3.12.3-slim
 
 # Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy project files
+# Set workdir
+WORKDIR /app
+
+# Salin semua file ke image
 COPY . .
 
-# Expose Flask port
-EXPOSE 5000
+# Install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install \
+      flask \
+      langchain \
+      langchain-community \
+      langchain-huggingface \
+      langchain-ollama \
+      chromadb \
+      torch==2.7.0 \
+      transformers==4.52.3
 
-# Run the Flask app
+# Jalankan aplikasi
 CMD ["python", "app.py"]
