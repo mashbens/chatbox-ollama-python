@@ -2,7 +2,7 @@ flask
 langchain
 langchain-chroma
 langchain-huggingface
-langchain-community  # jika perlu untuk RetrievalQA
+langchain-community
 torch
 transformers
 chromadb
