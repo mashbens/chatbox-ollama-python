@@ -33,7 +33,7 @@ def chat():
 
         # Load vector DB & model
         vectordb = load_vectordb()
-        llm = OllamaLLM(model="pnm-mistral", base_url="http://localhost:11434")
+        llm = OllamaLLM(model="pnm-mistral", base_url="http://ollama:11434")
 
         # Ambil dokumen berdasarkan similarity + score
         print("[INFO] Mencari dokumen relevan dari vector DB...")
@@ -76,17 +76,17 @@ def chat():
 
         # Buat prompt
         prompt = f"""
-Kamu adalah AI PNM. Jawablah pertanyaan berikut hanya berdasarkan isi modul. 
-Jika jawabannya tidak ditemukan dalam modul, katakan:
-"Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM yang diberikan."
+        Kamu adalah AI PNM. Jawablah pertanyaan berikut hanya berdasarkan isi modul. 
+        Jika jawabannya tidak ditemukan dalam modul, katakan:
+        "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM yang diberikan."
 
-Pertanyaan: {question}
+        Pertanyaan: {question}
 
-Isi modul:
-{context}
+        Isi modul:
+        {context}
 
-Jawaban:
-"""
+        Jawaban:
+        """
 
         print("[INFO] Mengirim prompt ke LLM...")
         jawaban = llm.invoke(prompt)
