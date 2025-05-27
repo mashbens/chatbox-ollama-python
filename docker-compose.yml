@@ -14,7 +14,7 @@ services:
     build: .
     container_name: langchain-flask
     ports:
-      - "5000:5000"
+      - "31131:5000"
     volumes:
       - ./db:/app/db
       - ./docs:/app/docs
