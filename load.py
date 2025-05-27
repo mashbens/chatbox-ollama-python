@@ -73,9 +73,9 @@ if __name__ == "__main__":
             "category": "mekaar"
         },
         {
-            "path": "./docs/SmartCleanVacuum.pdf",
-            "module": "vacuum",
-            "category": "vacuum"
+            "path": "./docs/PPU.pdf",
+            "module": "ulamm",
+            "category": "ulamm"
         }
         # Tambahkan file lainnya di sini
     ]
