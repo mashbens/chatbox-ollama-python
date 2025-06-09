@@ -67,6 +67,12 @@ def ingest_pdfs(file_list: list[dict]):
 
 if __name__ == "__main__":
     file_list = [
+
+        # {
+        #     "path": "./docs/data-ai.pdf",
+        #     "module": "data-ai",
+        #     "category": "data-ai"
+        # }
         {
             "path": "./docs/PPM.pdf",
             "module": "mekaar",

@@ -1,15 +1,4 @@
-version: '3.9'
-
 services:
-  ollama:
-    image: ollama/ollama
-    container_name: ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama:/root/.ollama
-    # command: bash -c "ollama pull pnm-mistral && ollama serve"
-
   flask_app:
     build: .
     container_name: langchain-flask
@@ -18,10 +7,15 @@ services:
     volumes:
       - ./db:/app/db
       - ./docs:/app/docs
+      - pip_cache:/root/.cache/pip  # ✅ cache pip
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-    depends_on:
-      - ollama
+    networks:
+      - ollama-net
+
+networks:
+  ollama-net:
+    external: true
 
 volumes:
-  ollama:
+  pip_cache:  # ✅ named volume untuk cache pip

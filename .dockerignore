@@ -1,0 +1,16 @@
+# Abaikan folder dokumentasi
+docs/
+
+# Abaikan folder virtual environment lokal
+myenv/
+
+# Abaikan file Makefile
+Makefile
+.gitignore
+load.py
+chroma.py
+docker-compose.ollama.yml
+Modelfile
+
+# Abaikan file README
+README.md
