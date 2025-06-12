@@ -7,23 +7,18 @@ import os
 
 app = Flask(__name__)
 
-def load_vectordb():
-    print("[INFO] Memuat vector database...")
+print("[INIT] Memuat embedding dan vector database...")
 
-    # 🟡 Path absolut ke folder 'db' di root proyek
-    # BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    
-    # DB_FOLDER = os.path.join(BASE_DIR, "db")
-    DB_FOLDER = "/app/db"
+embedding = HuggingFaceEmbeddings(
+    model_name="BAAI/bge-m3",
+    model_kwargs={"device": "cpu"},  # Ganti ke 'cuda' jika perlu
+    encode_kwargs={"normalize_embeddings": True}
+)
 
-    embedding = HuggingFaceEmbeddings(
-        model_name="BAAI/bge-m3",
-        model_kwargs={"device": "cpu"},  # ubah ke 'cuda' jika perlu
-        encode_kwargs={"normalize_embeddings": True}
-    )
-    vectordb = Chroma(persist_directory=DB_FOLDER, embedding_function=embedding)
-    print("[INFO] Vector DB berhasil dimuat.")
-    return vectordb
+DB_FOLDER = "/app/db"
+vectordb = Chroma(persist_directory=DB_FOLDER, embedding_function=embedding)
+
+print("[INIT] Vector DB berhasil dimuat.")
 
 @app.route("/ask", methods=["POST"])
 def chat():
@@ -40,9 +35,7 @@ def chat():
         print("Module filter:", module)
 
         # Load vector DB & model
-        vectordb = load_vectordb()
         llm = OllamaLLM(model="pnm-mistral", base_url="http://ollama:11434")
-        # llm = OllamaLLM(model="mistral", base_url="http://localhost:11434")
 
         # Ambil dokumen berdasarkan similarity + score
         print("[INFO] Mencari dokumen relevan dari vector DB...")
