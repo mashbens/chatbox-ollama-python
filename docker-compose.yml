@@ -1,21 +1,42 @@
+version: "3.9"
+
 services:
-  flask_app:
-    build: .
-    container_name: langchain-flask
+  ingest_app:
+    build: ./ingest-app
+    container_name: ingest-flask
     ports:
-      - "31131:5000"
+      - "31132:5000"  # Port upload/ingest
     volumes:
+      - ./uploads:/app/uploads
       - ./db:/app/db
-      - ./docs:/app/docs
-      - pip_cache:/root/.cache/pip  # ✅ cache pip
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - pip_cache:/root/.cache/pip
     networks:
       - ollama-net
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CHROMA_DB_DIR=/app/db
+      - UPLOAD_DIR=/app/uploads
+
+
+  chat_app:
+    build: ./chat-app
+    container_name: chat-flask
+    ports:
+      - "31131:5000"  # Port chat endpoint
+    volumes:
+      - ./uploads:/app/uploads
+      - ./db:/app/db
+      - pip_cache:/root/.cache/pip
+    networks:
+      - ollama-net
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CHROMA_DB_DIR=/app/db
+      - UPLOAD_DIR=/app/uploads
+
+volumes:
+  pip_cache:
 
 networks:
   ollama-net:
     external: true
-
-volumes:
-  pip_cache:  # ✅ named volume untuk cache pip

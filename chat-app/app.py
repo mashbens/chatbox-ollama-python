@@ -3,17 +3,25 @@ from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import OllamaLLM
 import traceback
+import os
 
 app = Flask(__name__)
 
 def load_vectordb():
     print("[INFO] Memuat vector database...")
+
+    # 🟡 Path absolut ke folder 'db' di root proyek
+    # BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    
+    # DB_FOLDER = os.path.join(BASE_DIR, "db")
+    DB_FOLDER = "/app/db"
+
     embedding = HuggingFaceEmbeddings(
         model_name="BAAI/bge-m3",
-        model_kwargs={"device": "cpu"},
+        model_kwargs={"device": "cpu"},  # ubah ke 'cuda' jika perlu
         encode_kwargs={"normalize_embeddings": True}
     )
-    vectordb = Chroma(persist_directory="db", embedding_function=embedding)
+    vectordb = Chroma(persist_directory=DB_FOLDER, embedding_function=embedding)
     print("[INFO] Vector DB berhasil dimuat.")
     return vectordb
 

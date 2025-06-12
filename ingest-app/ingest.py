@@ -24,10 +24,10 @@ def ingest_pdfs(file_list: list[dict]):
             docs = loader.load()
 
             for doc in docs:
-                doc.metadata["source"] = f"{module}.pdf"     # Untuk filter di API
+                doc.metadata["source"] = f"{module}.pdf"
                 doc.metadata["filepath"] = filepath
                 doc.metadata["category"] = category
-                doc.metadata["module"] = module              # Simpan juga tanpa ".pdf" kalau butuh
+                doc.metadata["module"] = module
 
             all_docs.extend(docs)
         except Exception as e:
@@ -42,7 +42,7 @@ def ingest_pdfs(file_list: list[dict]):
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     docs_split = splitter.split_documents(all_docs)
 
-    print("🧠 Memuat embedding model BAAI/bge-m3...")
+    print("🧠 Memuat model embedding BAAI/bge-m3...")
     try:
         embedding = HuggingFaceEmbeddings(
             model_name="BAAI/bge-m3",
@@ -53,36 +53,15 @@ def ingest_pdfs(file_list: list[dict]):
         print(f"❌ Gagal memuat model embedding: {e}")
         return
 
-    print("💾 Menyimpan ke ChromaDB (append jika sudah ada)...")
+    print("💾 Menyimpan ke ChromaDB...")
     try:
-        vectordb = Chroma(persist_directory="db", embedding_function=embedding)
+        # DB_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "db"))
+        DB_FOLDER =  "/app/db"
+        vectordb = Chroma(persist_directory=DB_FOLDER, embedding_function=embedding)
         vectordb.add_documents(docs_split)
         vectordb.persist()
     except Exception as e:
         print(f"❌ Gagal menyimpan ke ChromaDB: {e}")
         return
 
-    print("✅ Sukses! Embedding disimpan ke folder 'db/'.")
-
-
-if __name__ == "__main__":
-    file_list = [
-
-        # {
-        #     "path": "./docs/data-ai.pdf",
-        #     "module": "data-ai",
-        #     "category": "data-ai"
-        # }
-        {
-            "path": "./docs/PPM.pdf",
-            "module": "mekaar",
-            "category": "mekaar"
-        },
-        {
-            "path": "./docs/PPU.pdf",
-            "module": "ulamm",
-            "category": "ulamm"
-        }
-        # Tambahkan file lainnya di sini
-    ]
-    ingest_pdfs(file_list)
+    print("✅ Sukses! Embedding disimpan ke folder 'db/'")
