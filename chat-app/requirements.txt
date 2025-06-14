@@ -1,10 +1,9 @@
 flask
 langchain
-langchain-chroma
 langchain-huggingface
 langchain-community
 torch
 transformers
-chromadb
+qdrant-client
 langchain-ollama
-sentence_transformers
+sentence-transformers

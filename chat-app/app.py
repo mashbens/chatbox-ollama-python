@@ -1,25 +1,36 @@
 from flask import Flask, request, jsonify
-from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import OllamaLLM
+from langchain_qdrant import Qdrant
+from qdrant_client import QdrantClient
 import traceback
-import os
 
+# --- Konfigurasi Flask ---
 app = Flask(__name__)
 
-print("[INIT] Memuat embedding dan vector database...")
-
+# --- Konfigurasi Embedding ---
+print("[INIT] Memuat embedding model...")
 embedding = HuggingFaceEmbeddings(
     model_name="BAAI/bge-m3",
-    model_kwargs={"device": "cpu"},  # Ganti ke 'cuda' jika perlu
+    model_kwargs={"device": "cpu"},  # Ganti ke 'cuda' jika pakai GPU
     encode_kwargs={"normalize_embeddings": True}
 )
 
-DB_FOLDER = "/app/db"
-vectordb = Chroma(persist_directory=DB_FOLDER, embedding_function=embedding)
+# --- Koneksi ke Qdrant ---
+print("[INIT] Menghubungkan ke Qdrant...")
+client = QdrantClient(host="qdrant", port=6333)  
 
-print("[INIT] Vector DB berhasil dimuat.")
+# --- Inisialisasi VectorDB ---
+collection_name = "pdf_collection"  # Pastikan sama dengan yang digunakan saat ingest
+vectordb = Qdrant(
+    client=client,
+    collection_name=collection_name,
+    embeddings=embedding
+)
 
+print("[INIT] Vector DB Qdrant berhasil dimuat.")
+
+# --- Endpoint Chat ---
 @app.route("/ask", methods=["POST"])
 def chat():
     data = request.get_json()
@@ -34,11 +45,11 @@ def chat():
         print("Pertanyaan:", question)
         print("Module filter:", module)
 
-        # Load vector DB & model
+        # Load LLM
         llm = OllamaLLM(model="pnm-mistral", base_url="http://ollama:11434")
 
-        # Ambil dokumen berdasarkan similarity + score
-        print("[INFO] Mencari dokumen relevan dari vector DB...")
+        # Query ke Qdrant
+        print("[INFO] Mencari dokumen relevan dari Qdrant...")
         filter_query = {"module": module} if module else None
         all_docs = vectordb.similarity_search_with_score(question, k=5, filter=filter_query)
 
@@ -46,10 +57,9 @@ def chat():
         for i, (doc, score) in enumerate(all_docs):
             print(f"  {i+1}. Score: {score:.4f} | Source: {doc.metadata.get('source', 'unknown')}")
 
-        # Filter berdasarkan threshold dan modul (jika ada)
+        # Filter dokumen
         threshold = 1.3
         filtered_docs = []
-
         for doc, score in all_docs:
             source = doc.metadata.get("source", "")
             if score > threshold:
@@ -70,8 +80,6 @@ def chat():
             })
 
         print(f"[INFO] {len(filtered_docs)} dokumen lolos filter. Siap dibuat prompt.")
-
-        # Gabungkan isi dokumen
         context = "\n\n".join([doc.page_content for doc in filtered_docs])
         sumber_list = list({doc.metadata.get("source", "unknown") for doc in filtered_docs})
 
@@ -79,9 +87,9 @@ def chat():
 
         # Buat prompt
         prompt = f"""
-        Jawablah pertanyaan berikut hanya berdasarkan isi modul. 
-        Jika jawabannya tidak ditemukan dalam modul jangan berikan jawaban lain dan katakan:
-        "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM yang diberikan."
+        Jika pertanyaan terlalu singkat, tidak jelas, atau tidak memiliki konteks yang cukup untuk dijawab berdasarkan isi modul di bawah ini, mohon jawab:
+        "Pertanyaan Anda terlalu umum. Mohon ajukan pertanyaan yang lebih spesifik agar saya bisa membantu dengan tepat."
+
 
         Pertanyaan: {question}
 
@@ -97,10 +105,10 @@ def chat():
 
         if sumber_list == ["data-ai.pdf"]:
             sumber_list = []
+
         return jsonify({
             "response": {
                 "jawaban": jawaban.strip(),
-                # "jawaban": context,
                 "sumber": sumber_list
             }
         })
@@ -110,7 +118,6 @@ def chat():
         traceback_str = traceback.format_exc()
         print("Terjadi error:", error_message)
         print(traceback_str)
-
         return jsonify({
             "error": "Terjadi kesalahan saat memproses permintaan.",
             "detail": error_message,
