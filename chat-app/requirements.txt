@@ -2,8 +2,8 @@ flask
 langchain
 langchain-huggingface
 langchain-community
-torch
-transformers
-qdrant-client
 langchain-ollama
+langchain-qdrant
+qdrant-client
+transformers
 sentence-transformers

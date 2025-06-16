@@ -1,8 +1,8 @@
 flask
-torch
-langchain
-chromadb
-sentence-transformers
-langchain_community
 pypdf
-langchain_qdrant
+langchain
+langchain-community
+langchain-qdrant
+sentence-transformers
+transformers
+qdrant-client

@@ -1,5 +1,4 @@
 import os
-import torch
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 
@@ -68,7 +67,7 @@ def ingest_pdfs(file_list: list[dict]):
     try:
         embedding = HuggingFaceEmbeddings(
             model_name="BAAI/bge-m3",
-            model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"},
+            model_kwargs={"device": "cpu"},  # Ganti ke 'cuda' jika pakai GPU
             encode_kwargs={"normalize_embeddings": True}
         )
     except Exception as e:
