@@ -13,12 +13,7 @@ from qdrant_client.models import Distance, VectorParams
 # --- Konfigurasi Flask App ---
 app = Flask(__name__)
 ALLOWED_EXTENSIONS = {'pdf'}
-
-# BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-# UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-
-UPLOAD_FOLDER = "/app/uploads" 
-
+UPLOAD_FOLDER = "/app/uploads"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -39,18 +34,19 @@ def ingest_pdfs(file_list: list[dict]):
             print(f"❌ File tidak ditemukan: {filepath}")
             continue
 
-        print(f"📄 Memuat dokumen dari {filepath}")
+        print(f"📄 Memuat dan memecah dokumen dari: {filepath}")
         try:
             loader = PyPDFLoader(filepath)
-            docs = loader.load()
+            pages = loader.load_and_split()  # Ambil per halaman
 
-            for doc in docs:
-                doc.metadata["source"] = f"{module}.pdf"
-                doc.metadata["filepath"] = filepath
-                doc.metadata["category"] = category
-                doc.metadata["module"] = module
+            for i, page in enumerate(pages):
+                page.metadata["source"] = f"{module}.pdf"
+                page.metadata["filepath"] = filepath
+                page.metadata["category"] = category
+                page.metadata["module"] = module
+                page.metadata["page_number"] = i + 1  # ⬅️ Tambah info halaman
 
-            all_docs.extend(docs)
+            all_docs.extend(pages)
         except Exception as e:
             print(f"❌ Gagal memuat {filepath}: {e}")
             continue
@@ -60,14 +56,14 @@ def ingest_pdfs(file_list: list[dict]):
         return
 
     print("✂️ Memotong dokumen menjadi chunks...")
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     docs_split = splitter.split_documents(all_docs)
 
     print("🧠 Memuat model embedding BAAI/bge-m3...")
     try:
         embedding = HuggingFaceEmbeddings(
             model_name="BAAI/bge-m3",
-            model_kwargs={"device": "cpu"},  # Ganti ke 'cuda' jika pakai GPU
+            model_kwargs={"device": "cpu"},
             encode_kwargs={"normalize_embeddings": True}
         )
     except Exception as e:
@@ -77,13 +73,12 @@ def ingest_pdfs(file_list: list[dict]):
     print("💾 Menyimpan ke Qdrant...")
     try:
         client = QdrantClient(
-            host="qdrant",  # sesuaikan dengan nama service di docker-compose
+            host="qdrant",
             port=6333,
         )
 
         collection_name = "pdf_collection"
 
-        # Buat collection jika belum ada
         if not client.collection_exists(collection_name):
             client.create_collection(
                 collection_name=collection_name,

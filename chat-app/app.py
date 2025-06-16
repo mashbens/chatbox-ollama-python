@@ -51,22 +51,22 @@ def chat():
         # Query ke Qdrant
         print("[INFO] Mencari dokumen relevan dari Qdrant...")
         filter_query = {"module": module} if module else None
-        all_docs = vectordb.similarity_search_with_score(question, k=5, filter=filter_query)
+        all_docs = vectordb.similarity_search_with_score(question, k=10, filter=filter_query)
 
+        # Tampilkan info dokumen hasil similarity
         print("[DEBUG] Dokumen hasil similarity_search_with_score:")
         for i, (doc, score) in enumerate(all_docs):
-            print(f"  {i+1}. Score: {score:.4f} | Source: {doc.metadata.get('source', 'unknown')}")
+            print(f"{i+1}. Score: {score:.4f} | Page: {doc.metadata.get('page_number')} | Source: {doc.metadata.get('source')}")
 
-        # Filter dokumen
-        threshold = 1.3
+        # Filter dokumen dengan threshold yang lebih realistis
+        threshold = 0.6
         filtered_docs = []
         for doc, score in all_docs:
-            source = doc.metadata.get("source", "")
             if score > threshold:
-                print(f"[FILTER] Dokumen dengan score {score:.4f} dibuang karena > threshold {threshold}")
+                print(f"[FILTER] Dokumen dengan score {score:.4f} dibuang (threshold: {threshold})")
                 continue
-            if module and f"{module}.pdf" not in source:
-                print(f"[FILTER] Dokumen '{source}' dibuang karena bukan dari modul {module}")
+            if module and f"{module}.pdf" not in doc.metadata.get("source", ""):
+                print(f"[FILTER] Dokumen '{doc.metadata.get('source')}' dibuang karena bukan dari modul {module}")
                 continue
             filtered_docs.append(doc)
 
@@ -79,32 +79,38 @@ def chat():
                 }
             })
 
-        print(f"[INFO] {len(filtered_docs)} dokumen lolos filter. Siap dibuat prompt.")
-        context = "\n\n".join([doc.page_content for doc in filtered_docs])
-        sumber_list = list({doc.metadata.get("source", "unknown") for doc in filtered_docs})
+        # Susun konteks dengan informasi halaman
+        print(f"[INFO] {len(filtered_docs)} dokumen lolos filter. Menyusun konteks...")
+        context = "\n\n".join([
+            f"[Halaman {doc.metadata.get('page_number', '?')}] {doc.page_content.strip()}"
+            for doc in filtered_docs
+        ])
+        sumber_list = sorted(set([
+            f"{doc.metadata.get('source', 'unknown')} (halaman {doc.metadata.get('page_number', '?')})"
+            for doc in filtered_docs
+        ]))
 
         print("[DEBUG] Daftar sumber dokumen:", sumber_list)
 
-        # Buat prompt
+        # Buat prompt yang instruktif
         prompt = f"""
-        Jika pertanyaan terlalu singkat, tidak jelas, atau tidak memiliki konteks yang cukup untuk dijawab berdasarkan isi modul di bawah ini, mohon jawab:
-        "Pertanyaan Anda terlalu umum. Mohon ajukan pertanyaan yang lebih spesifik agar saya bisa membantu dengan tepat." dan jangan tambahkan jawaban lain.
+Anda adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM.
 
+Berikut ini adalah cuplikan dokumen yang relevan untuk menjawab pertanyaan:
 
-        Pertanyaan: {question}
+{context}
 
-        Isi modul:
-        {context}
+Tolong berikan jawaban yang jelas, akurat, dan mencakup semua informasi yang relevan dari dokumen di atas.
 
-        Jawaban:
-        """
+Pertanyaan:
+{question}
+
+Jawaban:
+"""
 
         print("[INFO] Mengirim prompt ke LLM...")
         jawaban = llm.invoke(prompt)
         print("[INFO] Jawaban LLM diterima.")
-
-        if sumber_list == ["data-ai.pdf"]:
-            sumber_list = []
 
         return jsonify({
             "response": {
@@ -123,6 +129,7 @@ def chat():
             "detail": error_message,
             "trace": traceback_str
         }), 500
+
 
 if __name__ == "__main__":
     print("[SERVER] Aplikasi Flask berjalan di http://0.0.0.0:5000")
