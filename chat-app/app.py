@@ -48,10 +48,10 @@ def chat():
         # Load LLM
         llm = OllamaLLM(model="pnm-mistral", base_url="http://ollama:11434")
 
-        # Query ke Qdrant
+        # Query ke Qdrant   
         print("[INFO] Mencari dokumen relevan dari Qdrant...")
         filter_query = {"module": module} if module else None
-        all_docs = vectordb.similarity_search_with_score(question, k=10, filter=filter_query)
+        all_docs = vectordb.similarity_search_with_score(question, k=20, filter=filter_query)
 
         # Tampilkan info dokumen hasil similarity
         print("[DEBUG] Dokumen hasil similarity_search_with_score:")
@@ -59,7 +59,7 @@ def chat():
             print(f"{i+1}. Score: {score:.4f} | Page: {doc.metadata.get('page_number')} | Source: {doc.metadata.get('source')}")
 
         # Filter dokumen dengan threshold yang lebih realistis
-        threshold = 0.6
+        threshold = 0.7
         filtered_docs = []
         for doc, score in all_docs:
             if score > threshold:
@@ -94,19 +94,23 @@ def chat():
 
         # Buat prompt yang instruktif
         prompt = f"""
-Anda adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM.
+        Anda adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Jawab hanya berdasarkan informasi yang ada di dalam dokumen tersebut.
 
-Berikut ini adalah cuplikan dokumen yang relevan untuk menjawab pertanyaan:
+        Berikut adalah potongan dokumen yang relevan:
 
-{context}
+        {context}
 
-Tolong berikan jawaban yang jelas, akurat, dan mencakup semua informasi yang relevan dari dokumen di atas.
+        Berdasarkan isi dokumen tersebut, berikan ringkasan informasi penting yang terkandung di dalamnya.  
+        Jika ada, sebutkan poin-poin utama, prosedur, peraturan, kebijakan, atau informasi lainnya yang relevan.  
+        Jika tidak ditemukan hal-hal tersebut, berikan penjelasan umum tentang isi dokumen secara objektif.
 
-Pertanyaan:
-{question}
+        Tolong jawab dengan bahasa yang jelas dan terstruktur.
 
-Jawaban:
-"""
+        Pertanyaan:
+        {question}
+
+        Jawaban:
+        """
 
         print("[INFO] Mengirim prompt ke LLM...")
         jawaban = llm.invoke(prompt)
