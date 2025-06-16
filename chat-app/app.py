@@ -88,7 +88,7 @@ def chat():
         # Buat prompt
         prompt = f"""
         Jika pertanyaan terlalu singkat, tidak jelas, atau tidak memiliki konteks yang cukup untuk dijawab berdasarkan isi modul di bawah ini, mohon jawab:
-        "Pertanyaan Anda terlalu umum. Mohon ajukan pertanyaan yang lebih spesifik agar saya bisa membantu dengan tepat."
+        "Pertanyaan Anda terlalu umum. Mohon ajukan pertanyaan yang lebih spesifik agar saya bisa membantu dengan tepat." dan jangan tambahkan jawaban lain.
 
 
         Pertanyaan: {question}

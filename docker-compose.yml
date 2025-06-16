@@ -8,13 +8,13 @@ services:
       - "31132:5000"  # Port upload/ingest
     volumes:
       - ./uploads:/app/uploads
-      - ./db:/app/db
+      # - ./db:/app/db
       - pip_cache:/root/.cache/pip
     networks:
       - ollama-net
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-      - CHROMA_DB_DIR=/app/db
+      # - CHROMA_DB_DIR=/app/db
       - UPLOAD_DIR=/app/uploads
 
 
@@ -25,13 +25,13 @@ services:
       - "31131:5000"  # Port chat endpoint
     volumes:
       - ./uploads:/app/uploads
-      - ./db:/app/db
+      # - ./db:/app/db
       - pip_cache:/root/.cache/pip
     networks:
       - ollama-net
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-      - CHROMA_DB_DIR=/app/db
+      # - CHROMA_DB_DIR=/app/db
       - UPLOAD_DIR=/app/uploads
 
 volumes:
