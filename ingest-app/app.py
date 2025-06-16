@@ -14,10 +14,10 @@ from qdrant_client.models import Distance, VectorParams
 app = Flask(__name__)
 ALLOWED_EXTENSIONS = {'pdf'}
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
+# BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 
-# UPLOAD_FOLDER = "/app/uploads" 
+UPLOAD_FOLDER = "/app/uploads" 
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
