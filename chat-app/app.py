@@ -12,16 +12,16 @@ app = Flask(__name__)
 print("[INIT] Memuat embedding model...")
 embedding = HuggingFaceEmbeddings(
     model_name="BAAI/bge-m3",
-    model_kwargs={"device": "cpu"},  # Ganti ke 'cuda' jika pakai GPU
+    model_kwargs={"device": "cpu"},
     encode_kwargs={"normalize_embeddings": True}
 )
 
 # --- Koneksi ke Qdrant ---
 print("[INIT] Menghubungkan ke Qdrant...")
-client = QdrantClient(host="qdrant", port=6333)  
+client = QdrantClient(host="qdrant", port=6333)
 
 # --- Inisialisasi VectorDB ---
-collection_name = "pdf_collection"  # Pastikan sama dengan yang digunakan saat ingest
+collection_name = "pdf_collection"
 vectordb = Qdrant(
     client=client,
     collection_name=collection_name,
@@ -45,30 +45,25 @@ def chat():
         print("Pertanyaan:", question)
         print("Module filter:", module)
 
-        # Load LLM
         llm = OllamaLLM(model="llama3.1:8b", base_url="http://ollama:11434")
 
-        # Query ke Qdrant   
+        # Query ke Qdrant
         print("[INFO] Mencari dokumen relevan dari Qdrant...")
         filter_query = {"module": module} if module else None
-        all_docs = vectordb.similarity_search_with_score(question, k=20, filter=filter_query)
+        all_docs = vectordb.similarity_search_with_score(question, k=15, filter=filter_query)
 
-        # Tampilkan info dokumen hasil similarity
-        print("[DEBUG] Dokumen hasil similarity_search_with_score:")
-        for i, (doc, score) in enumerate(all_docs):
-            print(f"{i+1}. Score: {score:.4f} | Page: {doc.metadata.get('page_number')} | Source: {doc.metadata.get('source')}")
-
-        # Filter dokumen dengan threshold yang lebih realistis
+        # Filter dan simpan (doc, score)
         threshold = 0.7
         filtered_docs = []
         for doc, score in all_docs:
             if score > threshold:
-                print(f"[FILTER] Dokumen dengan score {score:.4f} dibuang (threshold: {threshold})")
+                print(f"[FILTER] Dibuang karena score terlalu tinggi. Score: {score:.4f} | Page: {doc.metadata.get('page_number')} | Source: {doc.metadata.get('source')}")
                 continue
             if module and f"{module}.pdf" not in doc.metadata.get("source", ""):
-                print(f"[FILTER] Dokumen '{doc.metadata.get('source')}' dibuang karena bukan dari modul {module}")
+                print(f"[FILTER] Dibuang karena tidak sesuai modul. Score: {score:.4f} | Page: {doc.metadata.get('page_number')} | Source: {doc.metadata.get('source')}")
                 continue
-            filtered_docs.append(doc)
+            print(f"[KEEP] Dipertahankan. Score: {score:.4f} | Page: {doc.metadata.get('page_number')} | Source: {doc.metadata.get('source')}")
+            filtered_docs.append((doc, score))
 
         if not filtered_docs:
             print("[INFO] Tidak ada dokumen relevan yang ditemukan.")
@@ -79,51 +74,59 @@ def chat():
                 }
             })
 
-        # Susun konteks dengan informasi halaman
+        # Urutkan berdasarkan page_number
+        filtered_docs.sort(key=lambda x: int(x[0].metadata.get('page_number', 0)))
+
+        # Susun context dan sumber
         print(f"[INFO] {len(filtered_docs)} dokumen lolos filter. Menyusun konteks...")
-        context = "\n\n".join([
-            f"[Halaman {doc.metadata.get('page_number', '?')}] {doc.page_content.strip()}"
-            for doc in filtered_docs
-        ])
-        sumber_list = sorted(set([
-            f"{doc.metadata.get('source', 'unknown')} (halaman {doc.metadata.get('page_number', '?')})"
-            for doc in filtered_docs
-        ]))
+        context_parts = []
+        sumber_set = set()
 
-        print("[DEBUG] Daftar sumber dokumen:", sumber_list)
+        for doc, score in filtered_docs:
+            page = doc.metadata.get('page_number', '?')
+            source = doc.metadata.get('source', 'unknown')
+            context_parts.append(f"[Halaman {page}] {doc.page_content.strip()}")
+            sumber_set.add(f"{source} (halaman {page})")
+            print(f"[CONTEXT] Score: {score:.4f} | Page: {page} | Source: {source}")
 
-        # Buat prompt yang instruktif
+        context = "\n\n".join(context_parts)
+        sumber_list = sorted(sumber_set, key=lambda s: int(s.split("halaman ")[-1].rstrip(")")))
+
+        # Prompt
         prompt = f"""
-        Anda adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Jawab hanya berdasarkan informasi yang terdapat dalam dokumen tersebut, dan jangan mengarang.
+Anda adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Jawab hanya berdasarkan informasi yang terdapat dalam dokumen tersebut, dan jangan mengarang.
 
-        Berikut adalah potongan dokumen yang relevan:
+Berikut adalah potongan dokumen yang relevan:
 
-        {context}
+{context}
 
-        Berdasarkan isi dokumen tersebut, ringkas dan jelaskan informasi penting yang terkandung di dalamnya.
+Berdasarkan isi dokumen tersebut, ringkas dan jelaskan informasi penting yang terkandung di dalamnya.
 
-        Jika memungkinkan, susun jawaban dalam format poin-poin sebagai berikut:
-        1. [Judul Topik atau Kebijakan]
-        - Penjelasan singkat
-        - Contoh atau penerapan (jika ada)
+Jika memungkinkan, susun jawaban dalam format poin-poin sebagai berikut:
+1. [Judul Topik atau Kebijakan]
+- Penjelasan singkat
+- Contoh atau penerapan (jika ada)
 
-        Jika tidak ditemukan kebijakan, peraturan, atau prosedur tertentu, cukup berikan penjelasan umum yang sesuai dengan isi dokumen.
+Di akhir cantumkan Sumber dan halaman dokumen.
 
-        Tolong jawab dengan bahasa yang jelas, padat, dan terstruktur.
+Jika tidak ditemukan kebijakan, peraturan, atau prosedur tertentu, cukup berikan penjelasan umum yang sesuai dengan isi dokumen.
 
-        Pertanyaan:
-        {question}
+Tolong jawab dengan bahasa yang jelas, padat, dan terstruktur.
 
-        Jawaban:
-        """
+Pertanyaan:
+{question}
+
+Jawaban:
+"""
 
         print("[INFO] Mengirim prompt ke LLM...")
-        jawaban = llm.invoke(prompt)
+        # jawaban = llm.invoke(prompt)
         print("[INFO] Jawaban LLM diterima.")
 
         return jsonify({
             "response": {
-                "jawaban": jawaban.strip(),
+                # "jawaban": jawaban.strip(),
+                "jawaban": prompt.strip(),
                 "sumber": sumber_list
             }
         })
