@@ -46,7 +46,7 @@ def chat():
         print("Module filter:", module)
 
         # Load LLM
-        llm = OllamaLLM(model="pnm-mistral", base_url="http://ollama:11434")
+        llm = OllamaLLM(model="llama3.1:8b", base_url="http://ollama:11434")
 
         # Query ke Qdrant   
         print("[INFO] Mencari dokumen relevan dari Qdrant...")
@@ -94,17 +94,22 @@ def chat():
 
         # Buat prompt yang instruktif
         prompt = f"""
-        Anda adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Jawab hanya berdasarkan informasi yang ada di dalam dokumen tersebut.
+        Anda adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Jawab hanya berdasarkan informasi yang terdapat dalam dokumen tersebut, dan jangan mengarang.
 
         Berikut adalah potongan dokumen yang relevan:
 
         {context}
 
-        Berdasarkan isi dokumen tersebut, berikan ringkasan informasi penting yang terkandung di dalamnya.  
-        Jika ada, sebutkan poin-poin utama, prosedur, peraturan, kebijakan, atau informasi lainnya yang relevan.  
-        Jika tidak ditemukan hal-hal tersebut, berikan penjelasan umum tentang isi dokumen secara objektif.
+        Berdasarkan isi dokumen tersebut, ringkas dan jelaskan informasi penting yang terkandung di dalamnya.
 
-        Tolong jawab dengan bahasa yang jelas dan terstruktur.
+        Jika memungkinkan, susun jawaban dalam format poin-poin sebagai berikut:
+        1. [Judul Topik atau Kebijakan]
+        - Penjelasan singkat
+        - Contoh atau penerapan (jika ada)
+
+        Jika tidak ditemukan kebijakan, peraturan, atau prosedur tertentu, cukup berikan penjelasan umum yang sesuai dengan isi dokumen.
+
+        Tolong jawab dengan bahasa yang jelas, padat, dan terstruktur.
 
         Pertanyaan:
         {question}
