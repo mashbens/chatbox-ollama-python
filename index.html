@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Stream Chat (pnm-mistral)</title>
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; max-width:900px; margin:24px auto; padding:12px; }
+    .card { border:1px solid #e3e3e3; border-radius:8px; padding:12px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
+    textarea, input { width:100%; box-sizing:border-box; padding:8px; font-size:14px; }
+    #output { min-height:120px; white-space:pre-wrap; background:#0f1720; color:#e6eef8; padding:12px; border-radius:6px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; }
+    .controls { display:flex; gap:8px; margin-top:8px; }
+    button { padding:8px 12px; border-radius:6px; cursor:pointer; }
+    .small { width:160px; }
+    label { font-size:13px; margin-bottom:6px; display:block; }
+    .hint { color:#666; font-size:13px; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <h2>Stream demo — pnm-mistral</h2>
+
+  <div class="card">
+    <label>Endpoint URL</label>
+    <input id="url" value="http://10.60.2.15:11434/api/generate" />
+
+    <label style="margin-top:8px">Model</label>
+    <input id="model" value="pnm-mistral:latest" />
+
+    <label style="margin-top:8px">Prompt</label>
+    <textarea id="prompt" rows="3">halo?</textarea>
+
+    <div class="controls">
+      <button id="start">Start Stream</button>
+      <button id="stop" disabled>Stop</button>
+      <button id="clear">Clear</button>
+      <div style="flex:1"></div>
+      <button id="example">Contoh: tanya waktu</button>
+    </div>
+
+    <p class="hint">Catatan: server harus mengizinkan CORS agar browser bisa terhubung. Jika error CORS muncul, jalankan static server & akses dari <code>http://localhost:8000</code> atau atur CORS di VM.</p>
+  </div>
+
+  <h3>Output</h3>
+  <div id="output" class="card"></div>
+
+  <script>
+  (function(){
+    const startBtn = document.getElementById('start');
+    const stopBtn = document.getElementById('stop');
+    const clearBtn = document.getElementById('clear');
+    const output = document.getElementById('output');
+    const urlInput = document.getElementById('url');
+    const promptInput = document.getElementById('prompt');
+    const modelInput = document.getElementById('model');
+    const exampleBtn = document.getElementById('example');
+
+    let controller = null;
+    let reader = null;
+    let running = false;
+
+    exampleBtn.addEventListener('click', ()=> {
+      promptInput.value = "Sebutkan 3 fakta menarik tentang bahasa pemrograman Go.";
+    });
+
+    clearBtn.addEventListener('click', ()=> {
+      output.textContent = '';
+    });
+
+    stopBtn.addEventListener('click', () => {
+      stopStream();
+    });
+
+    startBtn.addEventListener('click', () => {
+      startStream();
+    });
+
+    function appendText(t) {
+      output.textContent += t;
+      // auto-scroll
+      output.scrollTop = output.scrollHeight;
+    }
+
+    async function startStream() {
+      if (running) return;
+      running = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      output.textContent = '';
+
+      const payload = {
+        model: modelInput.value || "pnm-mistral:latest",
+        prompt: promptInput.value || "",
+        stream: true
+      };
+
+      controller = new AbortController();
+      try {
+        const resp = await fetch(urlInput.value, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+
+        if (!resp.ok) {
+          appendText(`HTTP error: ${resp.status} ${resp.statusText}\n`);
+          stopStream();
+          return;
+        }
+
+        reader = resp.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        // helper ekstrak JSON
+        function extractJSONObjects(str) {
+          const objects = [];
+          let startIndex = -1;
+          let depth = 0;
+          for (let i = 0; i < str.length; i++) {
+            const ch = str[i];
+            if (ch === '{') {
+              if (depth === 0) startIndex = i;
+              depth++;
+            } else if (ch === '}') {
+              depth--;
+              if (depth === 0 && startIndex !== -1) {
+                const objStr = str.slice(startIndex, i+1);
+                objects.push({ json: objStr, end: i+1 });
+                startIndex = -1;
+              }
+            }
+          }
+          return objects;
+        }
+
+        // loop baca stream
+        while (running) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          let keepFrom = 0;
+          const objs = extractJSONObjects(buffer);
+          if (objs.length > 0) {
+            for (const o of objs) {
+              try {
+                const parsed = JSON.parse(o.json);
+                if (parsed.response !== undefined) {
+                  appendText(parsed.response);
+                }
+                if (parsed.done) {
+                  appendText('\n\n[STREAM DONE]\n');
+                  stopStream();
+                }
+              } catch (e) {
+                appendText('\n[parse error]\n');
+              }
+              keepFrom = o.end;
+            }
+            buffer = buffer.slice(keepFrom);
+          }
+        }
+
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          appendText('\n[stream aborted]\n');
+        } else {
+          appendText('\n[error] ' + String(err) + '\n');
+        }
+      } finally {
+        running = false;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        controller = null;
+        reader = null;
+      }
+    }
+
+    function stopStream() {
+      if (!running) return;
+      running = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      try {
+        if (controller) controller.abort();
+      } catch (e) {}
+    }
+
+    window.addEventListener('beforeunload', () => {
+      try { if (controller) controller.abort(); } catch(e){}
+    });
+
+  })();
+  </script>
+</body>
+</html>
