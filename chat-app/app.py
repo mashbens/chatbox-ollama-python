@@ -45,7 +45,7 @@ def chat():
         print("Pertanyaan:", question)
         print("Module filter:", module)
 
-        llm = OllamaLLM(model="llama3.1:8b", base_url="http://ollama:11434")
+        llm = OllamaLLM(model="pnm-mistral:latest", base_url="http://ollama:11434")
 
         # Query ke Qdrant
         print("[INFO] Mencari dokumen relevan dari Qdrant...")
