@@ -93,9 +93,9 @@ def chat():
         sumber_list = sorted(sumber_set, key=lambda s: int(s.split("halaman ")[-1].rstrip(")")))
 
         # Prompt
-# Anda adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Jawab hanya berdasarkan informasi yang terdapat dalam dokumen tersebut, dan jangan mengarang.
         prompt = f"""
-Saya adalah AI PNM. Jika informasi tidak ada dalam dokumen, katakan "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM yang diberikan."
+Saya adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Jawab hanya berdasarkan informasi yang terdapat dalam dokumen tersebut, dan jangan mengarang.
+Jika informasi tidak ada dalam dokumen, katakan "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM yang diberikan."
 Berikut adalah potongan dokumen yang relevan:
 {context}
 Berdasarkan isi dokumen tersebut, ringkas dan jelaskan informasi penting yang terkandung di dalamnya.
@@ -116,13 +116,13 @@ Jawaban:
 """
 
         print("[INFO] Mengirim prompt ke LLM...")
-        # jawaban = llm.invoke(prompt)
+        jawaban = llm.invoke(prompt)
         print("[INFO] Jawaban LLM diterima.")
 
         return jsonify({
             "response": {
-                # "jawaban": jawaban.strip(),
-                "jawaban": prompt.strip(),
+                "jawaban": jawaban.strip(),
+                # "jawaban": prompt.strip(),
                 "sumber": sumber_list
             }
         })
