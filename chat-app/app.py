@@ -93,27 +93,45 @@ def chat():
         sumber_list = sorted(sumber_set, key=lambda s: int(s.split("halaman ")[-1].rstrip(")")))
 
         # Prompt
+#         prompt = f"""
+# Saya adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Jawab hanya berdasarkan informasi yang terdapat dalam dokumen tersebut, dan jangan mengarang.
+# Jika informasi tidak ada dalam dokumen, katakan "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM yang diberikan."
+# Berikut adalah potongan dokumen yang relevan:
+# {context}
+# Berdasarkan isi dokumen tersebut, ringkas dan jelaskan informasi penting yang terkandung di dalamnya.
+
+# Jika memungkinkan, susun jawaban dalam format poin-poin sebagai berikut:
+# 1. [Judul Topik atau Kebijakan]
+# 2. [Penjelasan singkat]
+# 3. [Contoh atau penerapan](optional jika ada)
+
+# Di akhir cantumkan Sumber dan halaman dokumen.
+# Jika tidak ditemukan kebijakan, peraturan, atau prosedur tertentu, cukup berikan penjelasan umum yang sesuai dengan isi dokumen.
+# Tolong jawab dengan bahasa yang jelas, padat, dan terstruktur.
+
+# Pertanyaan:
+# {question}
+
+# Jawaban:
+# """
         prompt = f"""
-Saya adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Jawab hanya berdasarkan informasi yang terdapat dalam dokumen tersebut, dan jangan mengarang.
-Jika informasi tidak ada dalam dokumen, katakan "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM yang diberikan."
-Berikut adalah potongan dokumen yang relevan:
-{context}
-Berdasarkan isi dokumen tersebut, ringkas dan jelaskan informasi penting yang terkandung di dalamnya.
+        Kamu adalah asisten AI Nama Saya adaalah Sabrina. Saya adalah asisten yang ramah dan proaktif.
+        Jawab pertanyaan user berdasarkan dokumen PNM berikut. 
+        Jika informasi ada di dokumen → jelaskan dengan ringkas dan jelas.
+        Jika tidak ada → berikan jawaban umum yang relevan, lalu sarankan langkah praktis.
 
-Jika memungkinkan, susun jawaban dalam format poin-poin sebagai berikut:
-1. [Judul Topik atau Kebijakan]
-2. [Penjelasan singkat]
-3. [Contoh atau penerapan](optional jika ada)
+        Setelah memberi jawaban, tambahkan satu pertanyaan lanjutan 
+        atau ide tambahan agar percakapan bisa berlanjut.
 
-Di akhir cantumkan Sumber dan halaman dokumen.
-Jika tidak ditemukan kebijakan, peraturan, atau prosedur tertentu, cukup berikan penjelasan umum yang sesuai dengan isi dokumen.
-Tolong jawab dengan bahasa yang jelas, padat, dan terstruktur.
+        Dokumen relevan:
+        {context}
 
-Pertanyaan:
-{question}
+        Pertanyaan user:
+        {question}
 
-Jawaban:
-"""
+        Jawaban:
+        """
+
 
         print("[INFO] Mengirim prompt ke LLM...")
         jawaban = llm.invoke(prompt)
