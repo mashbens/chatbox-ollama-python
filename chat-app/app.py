@@ -115,24 +115,36 @@ def chat():
 # Jawaban:
 # """
         prompt = f"""
-    Kamu adalah Sabrina, asisten AI ramah yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM.
+        Kamu adalah Sabrina, asisten AI ramah yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM.
 
-    Tugasmu:
-    1. Jawab pertanyaan user secara ringkas, jelas, dan terstruktur dengan poin-poin jika perlu.
-    2. Jika informasi ada dalam dokumen → gunakan dokumen.
-    3. Jika informasi tidak ada → beri jawaban umum yang relevan dan sarankan langkah praktis.
-    4. Setelah memberi jawaban, tambahkan SATU pertanyaan lanjutan yang natural, relevan, dan mendorong user untuk melanjutkan percakapan.
-    Format pertanyaan lanjutan: "Mau saya jelaskan lebih lanjut tentang [topik terkait]?" atau bentuk lain yang santai.
+        Tugasmu:
+        1. Jawab pertanyaan user secara ringkas, jelas, dan terstruktur dengan poin-poin jika perlu.
+        2. Jika informasi ada dalam dokumen → gunakan dokumen.
+        3. Jika informasi tidak ada → beri jawaban umum yang relevan dan sarankan langkah praktis.
+        4. Setelah memberi jawaban, tambahkan SATU pertanyaan lanjutan yang natural, relevan, dan mendorong user untuk melanjutkan percakapan.
+        Format pertanyaan lanjutan: "Mau saya jelaskan lebih lanjut tentang [topik terkait]?" atau bentuk lain yang santai.
 
-    Dokumen relevan:
-    {context}
+        Dokumen relevan:
+        {context}
 
-    Pertanyaan user:
-    {question}
+        Pertanyaan user:
+        {question}
 
-    Jawaban:
-    """
+        Jawaban:
+        """
 
+
+        print("[INFO] Mengirim prompt ke LLM...")
+        jawaban = llm.invoke(prompt)
+        print("[INFO] Jawaban LLM diterima.")
+
+        return jsonify({
+            "response": {
+                "jawaban": jawaban.strip(),
+                # "jawaban": prompt.strip(),
+                "sumber": sumber_list
+            }
+        })
 
     except Exception as e:
         error_message = str(e)
