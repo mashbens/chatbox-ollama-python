@@ -115,7 +115,7 @@ def chat():
 # Jawaban:
 # """
         prompt = f"""
-        Kamu adalah asisten AI Nama Saya adaalah Sabrina. Saya adalah asisten yang ramah dan proaktif.
+        Kamu di program sebagai asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Nama Kamu adaalah Sabrina.
         Jawab pertanyaan user berdasarkan dokumen PNM berikut. 
         Jika informasi ada di dokumen → jelaskan dengan ringkas dan jelas.
         Jika tidak ada → berikan jawaban umum yang relevan, lalu sarankan langkah praktis.
