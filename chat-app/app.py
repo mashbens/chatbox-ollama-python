@@ -4,6 +4,7 @@ from langchain_ollama import OllamaLLM
 from langchain_qdrant import Qdrant
 from qdrant_client import QdrantClient
 import traceback
+import json
 
 # --- Konfigurasi Flask ---
 app = Flask(__name__)
@@ -30,7 +31,7 @@ vectordb = Qdrant(
 
 print("[INIT] Vector DB Qdrant berhasil dimuat.")
 
-# --- Endpoint Chat Normal (tetap persis) ---
+# --- Endpoint Chat Normal ---
 @app.route("/ask", methods=["POST"])
 def chat():
     data = request.get_json()
@@ -48,28 +49,23 @@ def chat():
         llm = OllamaLLM(model="pnm-mistral:latest", base_url="http://ollama:11434")
 
         # Query ke Qdrant
-        print("[INFO] Mencari dokumen relevan dari Qdrant...")
         filter_query = {"module": module} if module else None
         all_docs = vectordb.similarity_search_with_score(question, k=15, filter=filter_query)
 
-        # Filter dan simpan (doc, score)
+        # Filtering
         threshold = 0.7
         filtered_docs = []
         for doc, score in all_docs:
             if score > threshold:
-                print(f"[FILTER] Dibuang karena score terlalu tinggi. Score: {score:.4f} | Page: {doc.metadata.get('page_number')} | Source: {doc.metadata.get('source')}")
                 continue
             if module and f"{module}.pdf" not in doc.metadata.get("source", ""):
-                print(f"[FILTER] Dibuang karena tidak sesuai modul. Score: {score:.4f} | Page: {doc.metadata.get('page_number')} | Source: {doc.metadata.get('source')}")
                 continue
-            print(f"[KEEP] Dipertahankan. Score: {score:.4f} | Page: {doc.metadata.get('page_number')} | Source: {doc.metadata.get('source')}")
             filtered_docs.append((doc, score))
 
         if not filtered_docs:
-            print("[INFO] Tidak ada dokumen relevan yang ditemukan.")
             return jsonify({
                 "response": {
-                    "jawaban": "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM yang diberikan.",
+                    "jawaban": "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM.",
                     "sumber": []
                 }
             })
@@ -77,17 +73,14 @@ def chat():
         # Urutkan berdasarkan page_number
         filtered_docs.sort(key=lambda x: int(x[0].metadata.get('page_number', 0)))
 
-        # Susun context dan sumber
-        print(f"[INFO] {len(filtered_docs)} dokumen lolos filter. Menyusun konteks...")
+        # Context + sumber
         context_parts = []
         sumber_set = set()
-
         for doc, score in filtered_docs:
             page = doc.metadata.get('page_number', '?')
             source = doc.metadata.get('source', 'unknown')
             context_parts.append(f"[Halaman {page}] {doc.page_content.strip()}")
             sumber_set.add(f"{source} (halaman {page})")
-            print(f"[CONTEXT] Score: {score:.4f} | Page: {page} | Source: {source}")
 
         context = "\n\n".join(context_parts)
         sumber_list = sorted(sumber_set, key=lambda s: int(s.split("halaman ")[-1].rstrip(")")))
@@ -95,26 +88,16 @@ def chat():
         prompt = f"""
         Kamu adalah Sabrina, asisten AI ramah yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM.
 
-        Tugasmu:
-        1. Jawab pertanyaan user dengan jelas, ringkas, dan terstruktur.
-        2. Jika informasi ada di dokumen → gunakan dokumen.
-        3. Jika tidak ada → beri jawaban umum yang relevan, lalu sarankan langkah praktis.
-        4. Setelah memberi jawaban, tambahkan satu pertanyaan lanjutan atau tawaran ide.
-        - Letakkan follow-up di baris baru setelah jawaban utama (pisahkan dengan satu enter).
-        - Follow-up harus bervariasi (tidak selalu "Mau saya...", bisa juga "Apakah kamu ingin…", "Kalau tertarik saya bisa…", dll).
+        Pertanyaan user:
+        {question}
 
         Dokumen relevan:
         {context}
 
-        Pertanyaan user:
-        {question}
-
         Jawaban:
         """
 
-        print("[INFO] Mengirim prompt ke LLM...")
         jawaban = llm.invoke(prompt)
-        print("[INFO] Jawaban LLM diterima.")
 
         return jsonify({
             "response": {
@@ -124,18 +107,14 @@ def chat():
         })
 
     except Exception as e:
-        error_message = str(e)
-        traceback_str = traceback.format_exc()
-        print("Terjadi error:", error_message)
-        print(traceback_str)
         return jsonify({
             "error": "Terjadi kesalahan saat memproses permintaan.",
-            "detail": error_message,
-            "trace": traceback_str
+            "detail": str(e),
+            "trace": traceback.format_exc()
         }), 500
 
 
-# --- Endpoint Chat Streaming (baru) ---
+# --- Endpoint Chat Streaming ---
 @app.route("/ask_stream", methods=["POST"])
 def chat_stream():
     data = request.get_json()
@@ -152,7 +131,7 @@ def chat_stream():
 
         llm = OllamaLLM(model="pnm-mistral:latest", base_url="http://ollama:11434")
 
-        # Query ke Qdrant (sama kayak /ask)
+        # Query ke Qdrant (sama dengan /ask)
         filter_query = {"module": module} if module else None
         all_docs = vectordb.similarity_search_with_score(question, k=15, filter=filter_query)
 
@@ -165,12 +144,28 @@ def chat_stream():
                 continue
             filtered_docs.append((doc, score))
 
+        if not filtered_docs:
+            return jsonify({
+                "response": {
+                    "jawaban": "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM.",
+                    "sumber": []
+                }
+            })
+
+        # Urutkan berdasarkan page_number
+        filtered_docs.sort(key=lambda x: int(x[0].metadata.get('page_number', 0)))
+
+        # Context + sumber
         context_parts = []
+        sumber_set = set()
         for doc, score in filtered_docs:
             page = doc.metadata.get('page_number', '?')
+            source = doc.metadata.get('source', 'unknown')
             context_parts.append(f"[Halaman {page}] {doc.page_content.strip()}")
+            sumber_set.add(f"{source} (halaman {page})")
 
         context = "\n\n".join(context_parts)
+        sumber_list = sorted(sumber_set, key=lambda s: int(s.split("halaman ")[-1].rstrip(")")))
 
         prompt = f"""
         Kamu adalah Sabrina, asisten AI ramah yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM.
@@ -190,21 +185,19 @@ def chat_stream():
                     text = getattr(chunk, "content", str(chunk))
                     if text:
                         yield text
-                yield "[DONE]"
+                # setelah selesai, kirim meta sumber sekali di akhir
+                yield "\n\n[SUMBER] " + json.dumps(sumber_list, ensure_ascii=False)
+                yield "\n[DONE]"
             except Exception as e:
                 yield f"[ERROR] {str(e)}"
 
         return Response(stream_with_context(generate()), mimetype="text/plain")
 
     except Exception as e:
-        error_message = str(e)
-        traceback_str = traceback.format_exc()
-        print("Terjadi error:", error_message)
-        print(traceback_str)
         return jsonify({
             "error": "Terjadi kesalahan saat memproses permintaan.",
-            "detail": error_message,
-            "trace": traceback_str
+            "detail": str(e),
+            "trace": traceback.format_exc()
         }), 500
 
 
