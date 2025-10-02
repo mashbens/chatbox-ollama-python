@@ -92,37 +92,22 @@ def chat():
         context = "\n\n".join(context_parts)
         sumber_list = sorted(sumber_set, key=lambda s: int(s.split("halaman ")[-1].rstrip(")")))
 
-        # Prompt
-#         prompt = f"""
-# Saya adalah asisten AI yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM. Jawab hanya berdasarkan informasi yang terdapat dalam dokumen tersebut, dan jangan mengarang.
-# Jika informasi tidak ada dalam dokumen, katakan "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM yang diberikan."
-# Berikut adalah potongan dokumen yang relevan:
-# {context}
-# Berdasarkan isi dokumen tersebut, ringkas dan jelaskan informasi penting yang terkandung di dalamnya.
-
-# Jika memungkinkan, susun jawaban dalam format poin-poin sebagai berikut:
-# 1. [Judul Topik atau Kebijakan]
-# 2. [Penjelasan singkat]
-# 3. [Contoh atau penerapan](optional jika ada)
-
-# Di akhir cantumkan Sumber dan halaman dokumen.
-# Jika tidak ditemukan kebijakan, peraturan, atau prosedur tertentu, cukup berikan penjelasan umum yang sesuai dengan isi dokumen.
-# Tolong jawab dengan bahasa yang jelas, padat, dan terstruktur.
-
-# Pertanyaan:
-# {question}
-
-# Jawaban:
-# """
         prompt = f"""
         Kamu adalah Sabrina, asisten AI ramah yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM.
 
         Tugasmu:
-        1. Jawab pertanyaan user secara ringkas, jelas, dan terstruktur dengan poin-poin jika perlu.
-        2. Jika informasi ada dalam dokumen → gunakan dokumen.
-        3. Jika informasi tidak ada → beri jawaban umum yang relevan dan sarankan langkah praktis.
-        4. Setelah memberi jawaban, tambahkan SATU pertanyaan lanjutan yang natural, relevan, dan mendorong user untuk melanjutkan percakapan.
-        Format pertanyaan lanjutan: "Mau saya jelaskan lebih lanjut tentang [topik terkait]?" atau bentuk lain yang santai.
+        1. Jawab pertanyaan user dengan jelas, ringkas, dan terstruktur.
+        2. Jika informasi ada di dokumen → gunakan dokumen.
+        3. Jika tidak ada → beri jawaban umum yang relevan, lalu sarankan langkah praktis.
+        4. Setelah memberi jawaban, tambahkan satu pertanyaan lanjutan atau tawaran ide.
+        - Letakkan follow-up di baris baru setelah jawaban utama (pisahkan dengan satu enter).
+        - Follow-up harus bervariasi (tidak selalu "Mau saya...", bisa juga "Apakah kamu ingin…", "Kalau tertarik saya bisa…", dll).
+
+        Contoh format keluaran:
+        Jawaban utama…
+
+        Follow-up pertanyaan/ide.
+
 
         Dokumen relevan:
         {context}
@@ -141,7 +126,6 @@ def chat():
         return jsonify({
             "response": {
                 "jawaban": jawaban.strip(),
-                # "jawaban": prompt.strip(),
                 "sumber": sumber_list
             }
         })
