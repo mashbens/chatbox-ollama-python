@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, stream_with_context
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import OllamaLLM
 from langchain_qdrant import Qdrant
@@ -30,7 +30,7 @@ vectordb = Qdrant(
 
 print("[INIT] Vector DB Qdrant berhasil dimuat.")
 
-# --- Endpoint Chat ---
+# --- Endpoint Chat Normal (tetap persis) ---
 @app.route("/ask", methods=["POST"])
 def chat():
     data = request.get_json()
@@ -103,12 +103,6 @@ def chat():
         - Letakkan follow-up di baris baru setelah jawaban utama (pisahkan dengan satu enter).
         - Follow-up harus bervariasi (tidak selalu "Mau saya...", bisa juga "Apakah kamu ingin…", "Kalau tertarik saya bisa…", dll).
 
-        Contoh format keluaran:
-        Jawaban utama…
-
-        Follow-up pertanyaan/ide.
-
-
         Dokumen relevan:
         {context}
 
@@ -117,7 +111,6 @@ def chat():
 
         Jawaban:
         """
-
 
         print("[INFO] Mengirim prompt ke LLM...")
         jawaban = llm.invoke(prompt)
@@ -129,6 +122,79 @@ def chat():
                 "sumber": sumber_list
             }
         })
+
+    except Exception as e:
+        error_message = str(e)
+        traceback_str = traceback.format_exc()
+        print("Terjadi error:", error_message)
+        print(traceback_str)
+        return jsonify({
+            "error": "Terjadi kesalahan saat memproses permintaan.",
+            "detail": error_message,
+            "trace": traceback_str
+        }), 500
+
+
+# --- Endpoint Chat Streaming (baru) ---
+@app.route("/ask_stream", methods=["POST"])
+def chat_stream():
+    data = request.get_json()
+    question = data.get("question", "").strip()
+    module = data.get("module", "").strip()
+
+    if not question:
+        return jsonify({"error": "Parameter 'question' tidak boleh kosong."}), 400
+
+    try:
+        print("========== NEW STREAM REQUEST ==========")
+        print("Pertanyaan:", question)
+        print("Module filter:", module)
+
+        llm = OllamaLLM(model="pnm-mistral:latest", base_url="http://ollama:11434")
+
+        # Query ke Qdrant (sama kayak /ask)
+        filter_query = {"module": module} if module else None
+        all_docs = vectordb.similarity_search_with_score(question, k=15, filter=filter_query)
+
+        threshold = 0.7
+        filtered_docs = []
+        for doc, score in all_docs:
+            if score > threshold:
+                continue
+            if module and f"{module}.pdf" not in doc.metadata.get("source", ""):
+                continue
+            filtered_docs.append((doc, score))
+
+        context_parts = []
+        for doc, score in filtered_docs:
+            page = doc.metadata.get('page_number', '?')
+            context_parts.append(f"[Halaman {page}] {doc.page_content.strip()}")
+
+        context = "\n\n".join(context_parts)
+
+        prompt = f"""
+        Kamu adalah Sabrina, asisten AI ramah yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM.
+
+        Pertanyaan user:
+        {question}
+
+        Dokumen relevan:
+        {context}
+
+        Jawaban:
+        """
+
+        def generate():
+            try:
+                for chunk in llm.stream(prompt):
+                    text = getattr(chunk, "content", str(chunk))
+                    if text:
+                        yield text
+                yield "[DONE]"
+            except Exception as e:
+                yield f"[ERROR] {str(e)}"
+
+        return Response(stream_with_context(generate()), mimetype="text/plain")
 
     except Exception as e:
         error_message = str(e)
