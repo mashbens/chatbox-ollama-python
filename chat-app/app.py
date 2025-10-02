@@ -5,6 +5,7 @@ from langchain_qdrant import Qdrant
 from qdrant_client import QdrantClient
 import traceback
 import json
+import requests
 
 # --- Konfigurasi Flask ---
 app = Flask(__name__)
@@ -135,7 +136,7 @@ def chat():
             "trace": traceback_str
         }), 500
 
-# --- Endpoint Chat Streaming (versi baru) ---
+# --- Endpoint Chat Streaming (FIXED - langsung stream) ---
 @app.route("/ask-stream", methods=["POST"])
 def chat_stream():
     data = request.get_json()
@@ -204,9 +205,7 @@ def chat_stream():
 
             print("[INFO] Mengirim prompt ke LLM dengan streaming...")
             
-            # Kirim request streaming langsung ke Ollama
-            import requests
-            
+            # Konfigurasi requests untuk streaming tanpa buffering
             ollama_url = "http://ollama:11434/api/generate"
             payload = {
                 "model": "pnm-mistral:latest",
@@ -214,16 +213,21 @@ def chat_stream():
                 "stream": True
             }
             
-            response = requests.post(ollama_url, json=payload, stream=True)
+            # Gunakan timeout yang lebih panjang dan disable buffering
+            response = requests.post(
+                ollama_url, 
+                json=payload, 
+                stream=True,
+                timeout=60
+            )
             
-            # Stream response dari Ollama ke client
-            for line in response.iter_lines():
+            # Set immediate flush untuk setiap chunk
+            for line in response.iter_lines(decode_unicode=True):
                 if line:
-                    line_str = line.decode('utf-8')
                     try:
-                        data = json.loads(line_str)
+                        data = json.loads(line)
                         
-                        # Format response sesuai dengan contoh curl
+                        # Format response
                         response_data = {
                             "model": data.get("model", "pnm-mistral:latest"),
                             "created_at": data.get("created_at", ""),
@@ -231,8 +235,12 @@ def chat_stream():
                             "done": data.get("done", False)
                         }
                         
-                        # Kirim setiap chunk response
+                        # Langsung kirim tanpa buffering
                         yield f"data: {json.dumps(response_data)}\n\n"
+                        
+                        # Flush immediately
+                        # import sys
+                        # sys.stdout.flush()
                         
                         # Jika selesai, kirim sumber dokumen
                         if data.get("done", False):
@@ -253,7 +261,6 @@ def chat_stream():
             error_message = str(e)
             traceback_str = traceback.format_exc()
             print("Terjadi error:", error_message)
-            print(traceback_str)
             
             error_data = {
                 "error": "Terjadi kesalahan saat memproses permintaan.",
@@ -261,7 +268,69 @@ def chat_stream():
             }
             yield f"data: {json.dumps(error_data)}\n\n"
 
-    return Response(stream_with_context(generate()), content_type='text/plain')
+    # Response dengan header untuk disable buffering
+    return Response(
+        stream_with_context(generate()),
+        content_type='text/plain',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'  # Important for nginx
+        }
+    )
+
+# --- Endpoint Streaming Sederhana (Alternative) ---
+@app.route("/ask-stream-simple", methods=["POST"])
+def chat_stream_simple():
+    data = request.get_json()
+    question = data.get("question", "").strip()
+    
+    if not question:
+        return jsonify({"error": "Parameter 'question' tidak boleh kosong."}), 400
+
+    def generate():
+        try:
+            # Langsung ke Ollama tanpa RAG untuk testing
+            ollama_url = "http://ollama:11434/api/generate"
+            payload = {
+                "model": "pnm-mistral:latest",
+                "prompt": question,
+                "stream": True
+            }
+            
+            response = requests.post(ollama_url, json=payload, stream=True, timeout=60)
+            
+            for line in response.iter_lines(decode_unicode=True):
+                if line:
+                    try:
+                        data = json.loads(line)
+                        response_data = {
+                            "model": data.get("model", "pnm-mistral:latest"),
+                            "created_at": data.get("created_at", ""),
+                            "response": data.get("response", ""),
+                            "done": data.get("done", False)
+                        }
+                        yield f"data: {json.dumps(response_data)}\n\n"
+                        
+                        if data.get("done", False):
+                            break
+                            
+                    except json.JSONDecodeError:
+                        continue
+                        
+        except Exception as e:
+            error_data = {"error": str(e)}
+            yield f"data: {json.dumps(error_data)}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        content_type='text/plain',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        }
+    )
 
 if __name__ == "__main__":
     print("[SERVER] Aplikasi Flask berjalan di http://0.0.0.0:5000")
