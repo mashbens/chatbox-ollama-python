@@ -136,150 +136,7 @@ def chat():
             "trace": traceback_str
         }), 500
 
-# --- Endpoint Chat Streaming (FIXED - langsung stream) ---
-@app.route("/ask-stream", methods=["POST"])
-def chat_stream():
-    data = request.get_json()
-    question = data.get("question", "").strip()
-    module = data.get("module", "").strip()
 
-    if not question:
-        return jsonify({"error": "Parameter 'question' tidak boleh kosong."}), 400
-
-    def generate():
-        try:
-            print("========== NEW STREAMING REQUEST ==========")
-            print("Pertanyaan:", question)
-            print("Module filter:", module)
-
-            # Query ke Qdrant (sama seperti endpoint normal)
-            print("[INFO] Mencari dokumen relevan dari Qdrant...")
-            filter_query = {"module": module} if module else None
-            all_docs = vectordb.similarity_search_with_score(question, k=15, filter=filter_query)
-
-            # Filter dan simpan (doc, score)
-            threshold = 0.7
-            filtered_docs = []
-            for doc, score in all_docs:
-                if score > threshold:
-                    continue
-                if module and f"{module}.pdf" not in doc.metadata.get("source", ""):
-                    continue
-                filtered_docs.append((doc, score))
-
-            # Urutkan berdasarkan page_number
-            filtered_docs.sort(key=lambda x: int(x[0].metadata.get('page_number', 0)))
-
-            # Susun context dan sumber
-            context_parts = []
-            sumber_set = set()
-
-            for doc, score in filtered_docs:
-                page = doc.metadata.get('page_number', '?')
-                source = doc.metadata.get('source', 'unknown')
-                context_parts.append(f"[Halaman {page}] {doc.page_content.strip()}")
-                sumber_set.add(f"{source} (halaman {page})")
-
-            context = "\n\n".join(context_parts)
-            sumber_list = sorted(sumber_set, key=lambda s: int(s.split("halaman ")[-1].rstrip(")")))
-
-            prompt = f"""
-            Kamu adalah Sabrina, asisten AI ramah yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM.
-
-            Tugasmu:
-            1. Jawab pertanyaan user dengan jelas, ringkas, dan terstruktur.
-            2. Jika informasi ada di dokumen → gunakan dokumen.
-            3. Jika tidak ada → beri jawaban umum yang relevan, lalu sarankan langkah praktis.
-            4. Setelah memberi jawaban, tambahkan satu pertanyaan lanjutan atau tawaran ide.
-            - Letakkan follow-up di baris baru setelah jawaban utama (pisahkan dengan satu enter).
-            - Follow-up harus bervariasi (tidak selalu "Mau saya...", bisa juga "Apakah kamu ingin…", "Kalau tertarik saya bisa…", dll).
-
-            Dokumen relevan:
-            {context}
-
-            Pertanyaan user:
-            {question}
-
-            Jawaban:
-            """
-
-            print("[INFO] Mengirim prompt ke LLM dengan streaming...")
-            
-            # Konfigurasi requests untuk streaming tanpa buffering
-            ollama_url = "http://ollama:11434/api/generate"
-            payload = {
-                "model": "pnm-mistral:latest",
-                "prompt": prompt,
-                "stream": True
-            }
-            
-            # Gunakan timeout yang lebih panjang dan disable buffering
-            response = requests.post(
-                ollama_url, 
-                json=payload, 
-                stream=True,
-                timeout=60
-            )
-            
-            # Set immediate flush untuk setiap chunk
-            for line in response.iter_lines(decode_unicode=True):
-                if line:
-                    try:
-                        data = json.loads(line)
-                        
-                        # Format response
-                        response_data = {
-                            "model": data.get("model", "pnm-mistral:latest"),
-                            "created_at": data.get("created_at", ""),
-                            "response": data.get("response", ""),
-                            "done": data.get("done", False)
-                        }
-                        
-                        # Langsung kirim tanpa buffering
-                        yield f"data: {json.dumps(response_data)}\n\n"
-                        
-                        # Flush immediately
-                        # import sys
-                        # sys.stdout.flush()
-                        
-                        # Jika selesai, kirim sumber dokumen
-                        if data.get("done", False):
-                            final_data = {
-                                "model": "pnm-mistral:latest",
-                                "created_at": data.get("created_at", ""),
-                                "response": "",
-                                "done": True,
-                                "sumber": sumber_list
-                            }
-                            yield f"data: {json.dumps(final_data)}\n\n"
-                            break
-                            
-                    except json.JSONDecodeError:
-                        continue
-
-        except Exception as e:
-            error_message = str(e)
-            traceback_str = traceback.format_exc()
-            print("Terjadi error:", error_message)
-            
-            error_data = {
-                "error": "Terjadi kesalahan saat memproses permintaan.",
-                "detail": error_message
-            }
-            yield f"data: {json.dumps(error_data)}\n\n"
-
-    # Response dengan header untuk disable buffering
-    return Response(
-        stream_with_context(generate()),
-        content_type='text/plain',
-        headers={
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no'  # Important for nginx
-        }
-    )
-
-# --- Endpoint Streaming Sederhana (Alternative) ---
 @app.route("/ask-stream-simple", methods=["POST"])
 def chat_stream_simple():
     data = request.get_json()
@@ -290,7 +147,6 @@ def chat_stream_simple():
 
     def generate():
         try:
-            # Langsung ke Ollama tanpa RAG untuk testing
             ollama_url = "http://ollama:11434/api/generate"
             payload = {
                 "model": "pnm-mistral:latest",
@@ -298,33 +154,20 @@ def chat_stream_simple():
                 "stream": True
             }
             
-            response = requests.post(ollama_url, json=payload, stream=True, timeout=60)
-            
-            for line in response.iter_lines(decode_unicode=True):
-                if line:
-                    try:
-                        data = json.loads(line)
-                        response_data = {
-                            "model": data.get("model", "pnm-mistral:latest"),
-                            "created_at": data.get("created_at", ""),
-                            "response": data.get("response", ""),
-                            "done": data.get("done", False)
-                        }
-                        yield f"data: {json.dumps(response_data)}\n\n"
-                        
-                        if data.get("done", False):
-                            break
-                            
-                    except json.JSONDecodeError:
-                        continue
-                        
+            # stream=True biar dapet chunk dari Ollama langsung
+            with requests.post(ollama_url, json=payload, stream=True, timeout=0) as response:
+                for line in response.iter_lines(decode_unicode=True):
+                    if line:
+                        # teruskan raw JSON dari Ollama, tambahkan newline
+                        yield line + "\n"
+
         except Exception as e:
             error_data = {"error": str(e)}
-            yield f"data: {json.dumps(error_data)}\n\n"
+            yield json.dumps(error_data) + "\n"
 
     return Response(
         stream_with_context(generate()),
-        content_type='text/plain',
+        content_type='application/json',
         headers={
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
