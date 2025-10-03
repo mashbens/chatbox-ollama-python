@@ -175,6 +175,115 @@ def chat_stream_simple():
         }
     )
 
+@app.route("/ask-stream", methods=["POST"])
+def chat_stream():
+    data = request.get_json()
+    question = data.get("question", "").strip()
+    module = data.get("module", "").strip()
+
+    if not question:
+        return jsonify({"error": "Parameter 'question' tidak boleh kosong."}), 400
+
+    def generate():
+        try:
+            print("========== NEW STREAM REQUEST ==========")
+            print("Pertanyaan:", question)
+            print("Module filter:", module)
+
+            # --- Step 1: Query Qdrant persis kayak /ask ---
+            filter_query = {"module": module} if module else None
+            all_docs = vectordb.similarity_search_with_score(question, k=15, filter=filter_query)
+
+            threshold = 0.7
+            filtered_docs = []
+            for doc, score in all_docs:
+                if score > threshold:
+                    continue
+                if module and f"{module}.pdf" not in doc.metadata.get("source", ""):
+                    continue
+                filtered_docs.append((doc, score))
+
+            if not filtered_docs:
+                # kalau gak ada dokumen relevan → kirim error langsung
+                yield json.dumps({
+                    "response": {
+                        "jawaban": "Maaf, saya tidak menemukan jawaban untuk pertanyaan tersebut dalam modul-modul PNM yang diberikan.",
+                        "sumber": []
+                    }
+                }) + "\n"
+                return
+
+            # Urutkan berdasarkan halaman
+            filtered_docs.sort(key=lambda x: int(x[0].metadata.get('page_number', 0)))
+
+            # Build context & sumber
+            context_parts = []
+            sumber_set = set()
+            for doc, score in filtered_docs:
+                page = doc.metadata.get('page_number', '?')
+                source = doc.metadata.get('source', 'unknown')
+                context_parts.append(f"[Halaman {page}] {doc.page_content.strip()}")
+                sumber_set.add(f"{source} (halaman {page})")
+
+            context = "\n\n".join(context_parts)
+            sumber_list = sorted(sumber_set, key=lambda s: int(s.split("halaman ")[-1].rstrip(")")))
+
+            # --- Step 2: Bangun prompt sama persis kayak /ask ---
+            prompt = f"""
+            Kamu adalah Sabrina, asisten AI ramah yang membantu menjawab pertanyaan berdasarkan dokumen resmi PNM.
+
+            Tugasmu:
+            1. Jawab pertanyaan user dengan jelas, ringkas, dan terstruktur.
+            2. Jika informasi ada di dokumen → gunakan dokumen.
+            3. Jika tidak ada → beri jawaban umum yang relevan, lalu sarankan langkah praktis.
+            4. Setelah memberi jawaban, tambahkan satu pertanyaan lanjutan atau tawaran ide.
+            - Letakkan follow-up di baris baru setelah jawaban utama (pisahkan dengan satu enter).
+            - Follow-up harus bervariasi (tidak selalu "Mau saya...", bisa juga "Apakah kamu ingin…", "Kalau tertarik saya bisa…", dll).
+
+            Dokumen relevan:
+            {context}
+
+            Pertanyaan user:
+            {question}
+
+            Jawaban:
+            """
+
+            # --- Step 3: Panggil Ollama API dengan stream=True ---
+            ollama_url = "http://ollama:11434/api/generate"
+            payload = {
+                "model": "pnm-mistral:latest",
+                "prompt": prompt,
+                "stream": True
+            }
+
+            with requests.post(ollama_url, json=payload, stream=True, timeout=None) as response:
+                for line in response.iter_lines():
+                    if line:
+                        decoded = line.decode("utf-8") if isinstance(line, bytes) else line
+                        yield decoded + "\n"
+
+                # --- Step 4: Tambahin sumber setelah selesai ---
+                final_data = {
+                    "sumber": sumber_list
+                }
+                yield json.dumps(final_data) + "\n"
+
+        except Exception as e:
+            error_data = {"error": str(e)}
+            yield json.dumps(error_data) + "\n"
+
+    return Response(
+        stream_with_context(generate()),
+        content_type='application/json',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        }
+    )
+
+
 if __name__ == "__main__":
     print("[SERVER] Aplikasi Flask berjalan di http://0.0.0.0:5000")
     app.run(debug=True, host="0.0.0.0", port=5000)
