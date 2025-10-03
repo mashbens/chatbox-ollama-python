@@ -136,7 +136,6 @@ def chat():
             "trace": traceback_str
         }), 500
 
-
 @app.route("/ask-stream-simple", methods=["POST"])
 def chat_stream_simple():
     data = request.get_json()
@@ -154,11 +153,13 @@ def chat_stream_simple():
                 "stream": True
             }
             
-            # timeout=None biar gak di-cut
+            # timeout=None biar gak dipotong
             with requests.post(ollama_url, json=payload, stream=True, timeout=None) as response:
-                for line in response.iter_lines(decode_unicode=True):
+                for line in response.iter_lines():
                     if line:
-                        yield line + "\n"   # langsung raw JSON tiap baris
+                        # pastikan decode ke string
+                        decoded = line.decode("utf-8") if isinstance(line, bytes) else line
+                        yield decoded + "\n"
 
         except Exception as e:
             error_data = {"error": str(e)}
