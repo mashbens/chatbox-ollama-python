@@ -154,12 +154,11 @@ def chat_stream_simple():
                 "stream": True
             }
             
-            # stream=True biar dapet chunk dari Ollama langsung
-            with requests.post(ollama_url, json=payload, stream=True, timeout=0) as response:
+            # timeout=None biar gak di-cut
+            with requests.post(ollama_url, json=payload, stream=True, timeout=None) as response:
                 for line in response.iter_lines(decode_unicode=True):
                     if line:
-                        # teruskan raw JSON dari Ollama, tambahkan newline
-                        yield line + "\n"
+                        yield line + "\n"   # langsung raw JSON tiap baris
 
         except Exception as e:
             error_data = {"error": str(e)}
