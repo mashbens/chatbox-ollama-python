@@ -15,45 +15,46 @@ app = Flask(__name__)
 USERNAME = "admin"
 PASSWORD = "admin123"
 
-def check_basic_auth(auth_header):
-    """Validasi header Authorization manual."""
-    if not auth_header:
-        return False
-
-    try:
-        # Format harus: Basic <token>
-        scheme, encoded = auth_header.split(" ", 1)
-        if scheme.lower() != "basic":
-            return False
-
-        # Decode Base64 → hasil "username:password"
-        decoded_bytes = base64.b64decode(encoded.strip())
-        decoded_str = decoded_bytes.decode("utf-8")
-        username, password = decoded_str.split(":", 1)
-
-        # Cek kredensial
-        return username == USERNAME and password == PASSWORD
-
-    except Exception:
-        return False
-
-
 def requires_auth(f):
-    """Decorator untuk melindungi endpoint."""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth_header = request.headers.get("Authorization", "")
-        if not check_basic_auth(auth_header):
+        if not auth_header.startswith("Basic "):
             return Response(
-                jsonify({"error": "Unauthorized"}).get_data(as_text=True),
+                json.dumps({"error": "Unauthorized"}),
                 401,
                 {
                     "WWW-Authenticate": 'Basic realm="Login Required"',
                     "Content-Type": "application/json"
                 }
             )
+
+        try:
+            # Decode token base64
+            encoded = auth_header.split(" ", 1)[1]
+            decoded = base64.b64decode(encoded).decode("utf-8")
+            username, password = decoded.split(":", 1)
+        except Exception:
+            return Response(
+                json.dumps({"error": "Invalid Authorization header"}),
+                401,
+                {"Content-Type": "application/json"}
+            )
+
+        if username != USERNAME or password != PASSWORD:
+            return Response(
+                json.dumps({"error": "Unauthorized"}),
+                401,
+                {
+                    "WWW-Authenticate": 'Basic realm="Login Required"',
+                    "Content-Type": "application/json"
+                }
+            )
+
+        # kalau lolos → lanjut ke endpoint
         return f(*args, **kwargs)
     return decorated
+
 
 # --- Konfigurasi Embedding ---
 print("[INIT] Memuat embedding model...")
