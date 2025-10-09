@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Stream Chat (pnm-mistral)</title>
+  <title>Stream Chat - ask-stream-simple</title>
   <style>
     body { font-family: Inter, system-ui, sans-serif; max-width:900px; margin:24px auto; padding:12px; }
-    .card { border:1px solid #e3e3e3; border-radius:8px; padding:12px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
+    .card { border:1px solid #e3e3e3; border-radius:8px; padding:12px; box-shadow:0 2px 6px rgba(0,0,0,0.03); }
     textarea, input { width:100%; box-sizing:border-box; padding:8px; font-size:14px; }
-    #output { min-height:120px; white-space:pre-wrap; background:#0f1720; color:#e6eef8; padding:12px; border-radius:6px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; }
+    #output { min-height:120px; white-space:pre-wrap; background:#0f1720; color:#e6eef8; padding:12px; border-radius:6px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; }
     .controls { display:flex; gap:8px; margin-top:8px; }
     button { padding:8px 12px; border-radius:6px; cursor:pointer; }
     .small { width:160px; }
@@ -17,27 +17,25 @@
   </style>
 </head>
 <body>
-  <h2>Stream demo — pnm-mistral</h2>
+  <h2>Stream demo — ask-stream-simple</h2>
 
   <div class="card">
     <label>Endpoint URL</label>
-    <input id="url" value="http://10.60.2.15:11434/api/generate" />
+    <input id="url" value="http://10.60.2.15:31131/ask-stream-simple" />
 
-    <label style="margin-top:8px">Model</label>
-    <input id="model" value="pnm-mistral:latest" />
+    <label style="margin-top:8px">Question</label>
+    <textarea id="question" rows="3">rangkum pdf ini?</textarea>
 
-    <label style="margin-top:8px">Prompt</label>
-    <textarea id="prompt" rows="3">halo?</textarea>
+    <label style="margin-top:8px">Module</label>
+    <input id="module" value="mekaar" />
 
     <div class="controls">
       <button id="start">Start Stream</button>
       <button id="stop" disabled>Stop</button>
       <button id="clear">Clear</button>
-      <div style="flex:1"></div>
-      <button id="example">Contoh: tanya waktu</button>
     </div>
 
-    <p class="hint">Catatan: server harus mengizinkan CORS agar browser bisa terhubung. Jika error CORS muncul, jalankan static server & akses dari <code>http://localhost:8000</code> atau atur CORS di VM.</p>
+    <p class="hint">Catatan: pastikan server mengizinkan CORS agar browser bisa akses API langsung.</p>
   </div>
 
   <h3>Output</h3>
@@ -50,33 +48,19 @@
     const clearBtn = document.getElementById('clear');
     const output = document.getElementById('output');
     const urlInput = document.getElementById('url');
-    const promptInput = document.getElementById('prompt');
-    const modelInput = document.getElementById('model');
-    const exampleBtn = document.getElementById('example');
+    const questionInput = document.getElementById('question');
+    const moduleInput = document.getElementById('module');
 
     let controller = null;
     let reader = null;
     let running = false;
 
-    exampleBtn.addEventListener('click', ()=> {
-      promptInput.value = "Sebutkan 3 fakta menarik tentang bahasa pemrograman Go.";
-    });
-
-    clearBtn.addEventListener('click', ()=> {
-      output.textContent = '';
-    });
-
-    stopBtn.addEventListener('click', () => {
-      stopStream();
-    });
-
-    startBtn.addEventListener('click', () => {
-      startStream();
-    });
+    clearBtn.addEventListener('click', () => output.textContent = '');
+    stopBtn.addEventListener('click', () => stopStream());
+    startBtn.addEventListener('click', () => startStream());
 
     function appendText(t) {
       output.textContent += t;
-      // auto-scroll
       output.scrollTop = output.scrollHeight;
     }
 
@@ -88,9 +72,8 @@
       output.textContent = '';
 
       const payload = {
-        model: modelInput.value || "pnm-mistral:latest",
-        prompt: promptInput.value || "",
-        stream: true
+        question: questionInput.value || "",
+        module: moduleInput.value || ""
       };
 
       controller = new AbortController();
@@ -112,7 +95,6 @@
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
 
-        // helper ekstrak JSON
         function extractJSONObjects(str) {
           const objects = [];
           let startIndex = -1;
@@ -125,8 +107,8 @@
             } else if (ch === '}') {
               depth--;
               if (depth === 0 && startIndex !== -1) {
-                const objStr = str.slice(startIndex, i+1);
-                objects.push({ json: objStr, end: i+1 });
+                const objStr = str.slice(startIndex, i + 1);
+                objects.push({ json: objStr, end: i + 1 });
                 startIndex = -1;
               }
             }
@@ -134,7 +116,6 @@
           return objects;
         }
 
-        // loop baca stream
         while (running) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -143,32 +124,25 @@
 
           let keepFrom = 0;
           const objs = extractJSONObjects(buffer);
-          if (objs.length > 0) {
-            for (const o of objs) {
-              try {
-                const parsed = JSON.parse(o.json);
-                if (parsed.response !== undefined) {
-                  appendText(parsed.response);
-                }
-                if (parsed.done) {
-                  appendText('\n\n[STREAM DONE]\n');
-                  stopStream();
-                }
-              } catch (e) {
-                appendText('\n[parse error]\n');
+          for (const o of objs) {
+            try {
+              const parsed = JSON.parse(o.json);
+              if (parsed.response !== undefined) appendText(parsed.response);
+              if (parsed.done) {
+                appendText('\n\n[STREAM DONE]\n');
+                stopStream();
               }
-              keepFrom = o.end;
+            } catch (e) {
+              appendText('\n[parse error]\n');
             }
-            buffer = buffer.slice(keepFrom);
+            keepFrom = o.end;
           }
+          buffer = buffer.slice(keepFrom);
         }
 
       } catch (err) {
-        if (err.name === 'AbortError') {
-          appendText('\n[stream aborted]\n');
-        } else {
-          appendText('\n[error] ' + String(err) + '\n');
-        }
+        if (err.name === 'AbortError') appendText('\n[stream aborted]\n');
+        else appendText('\n[error] ' + String(err) + '\n');
       } finally {
         running = false;
         startBtn.disabled = false;
@@ -183,15 +157,12 @@
       running = false;
       startBtn.disabled = false;
       stopBtn.disabled = true;
-      try {
-        if (controller) controller.abort();
-      } catch (e) {}
+      try { if (controller) controller.abort(); } catch (e) {}
     }
 
     window.addEventListener('beforeunload', () => {
       try { if (controller) controller.abort(); } catch(e){}
     });
-
   })();
   </script>
 </body>

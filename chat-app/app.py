@@ -3,12 +3,57 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import OllamaLLM
 from langchain_qdrant import Qdrant
 from qdrant_client import QdrantClient
+from functools import wraps
 import traceback
 import json
 import requests
+import base64
 
 # --- Konfigurasi Flask ---
 app = Flask(__name__)
+
+USERNAME = "admin"
+PASSWORD = "admin123"
+
+def check_basic_auth(auth_header):
+    """Validasi header Authorization manual."""
+    if not auth_header:
+        return False
+
+    try:
+        # Format harus: Basic <token>
+        scheme, encoded = auth_header.split(" ", 1)
+        if scheme.lower() != "basic":
+            return False
+
+        # Decode Base64 → hasil "username:password"
+        decoded_bytes = base64.b64decode(encoded.strip())
+        decoded_str = decoded_bytes.decode("utf-8")
+        username, password = decoded_str.split(":", 1)
+
+        # Cek kredensial
+        return username == USERNAME and password == PASSWORD
+
+    except Exception:
+        return False
+
+
+def requires_auth(f):
+    """Decorator untuk melindungi endpoint."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not check_basic_auth(auth_header):
+            return Response(
+                jsonify({"error": "Unauthorized"}).get_data(as_text=True),
+                401,
+                {
+                    "WWW-Authenticate": 'Basic realm="Login Required"',
+                    "Content-Type": "application/json"
+                }
+            )
+        return f(*args, **kwargs)
+    return decorated
 
 # --- Konfigurasi Embedding ---
 print("[INIT] Memuat embedding model...")
@@ -34,6 +79,7 @@ print("[INIT] Vector DB Qdrant berhasil dimuat.")
 
 # --- Endpoint Chat Normal (tetap persis) ---
 @app.route("/ask", methods=["POST"])
+@requires_auth
 def chat():
     data = request.get_json()
     question = data.get("question", "").strip()
@@ -102,7 +148,7 @@ def chat():
         2. Jika informasi ada di dokumen → gunakan dokumen.
         3. Jika tidak ada → beri jawaban umum yang relevan, lalu sarankan langkah praktis.
         4. Setelah memberi jawaban, tambahkan satu pertanyaan lanjutan atau tawaran ide.
-        - Letakkan follow-up di baris baru setelah jawaban utama (pisahkan dengan satu enter).
+        - Letakkan follow-up di baris baru setelah jawaban utama pisahkan dengan satu enter.
         - Follow-up harus bervariasi (tidak selalu "Mau saya...", bisa juga "Apakah kamu ingin…", "Kalau tertarik saya bisa…", dll).
 
         Dokumen relevan:
@@ -136,46 +182,9 @@ def chat():
             "trace": traceback_str
         }), 500
 
-@app.route("/ask-stream-simple", methods=["POST"])
-def chat_stream_simple():
-    data = request.get_json()
-    question = data.get("question", "").strip()
-    
-    if not question:
-        return jsonify({"error": "Parameter 'question' tidak boleh kosong."}), 400
-
-    def generate():
-        try:
-            ollama_url = "http://ollama:11434/api/generate"
-            payload = {
-                "model": "pnm-mistral:latest",
-                "prompt": question,
-                "stream": True
-            }
-            
-            # timeout=None biar gak dipotong
-            with requests.post(ollama_url, json=payload, stream=True, timeout=None) as response:
-                for line in response.iter_lines():
-                    if line:
-                        # pastikan decode ke string
-                        decoded = line.decode("utf-8") if isinstance(line, bytes) else line
-                        yield decoded + "\n"
-
-        except Exception as e:
-            error_data = {"error": str(e)}
-            yield json.dumps(error_data) + "\n"
-
-    return Response(
-        stream_with_context(generate()),
-        content_type='application/json',
-        headers={
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no'
-        }
-    )
 
 @app.route("/ask-stream", methods=["POST"])
+@requires_auth
 def chat_stream():
     data = request.get_json()
     question = data.get("question", "").strip()
@@ -237,7 +246,7 @@ def chat_stream():
             2. Jika informasi ada di dokumen → gunakan dokumen.
             3. Jika tidak ada → beri jawaban umum yang relevan, lalu sarankan langkah praktis.
             4. Setelah memberi jawaban, tambahkan satu pertanyaan lanjutan atau tawaran ide.
-            - Letakkan follow-up di baris baru setelah jawaban utama (pisahkan dengan satu enter).
+            - Letakkan follow-up di baris baru setelah jawaban utama pisahkan dengan satu enter.
             - Follow-up harus bervariasi (tidak selalu "Mau saya...", bisa juga "Apakah kamu ingin…", "Kalau tertarik saya bisa…", dll).
 
             Dokumen relevan:
@@ -282,6 +291,46 @@ def chat_stream():
             'X-Accel-Buffering': 'no'
         }
     )
+
+# @app.route("/ask-stream-simple", methods=["POST"])
+# def chat_stream_simple():
+#     data = request.get_json()
+#     question = data.get("question", "").strip()
+    
+#     if not question:
+#         return jsonify({"error": "Parameter 'question' tidak boleh kosong."}), 400
+
+#     def generate():
+#         try:
+#             ollama_url = "http://ollama:11434/api/generate"
+#             payload = {
+#                 "model": "pnm-mistral:latest",
+#                 "prompt": question,
+#                 "stream": True
+#             }
+            
+#             # timeout=None biar gak dipotong
+#             with requests.post(ollama_url, json=payload, stream=True, timeout=None) as response:
+#                 for line in response.iter_lines():
+#                     if line:
+#                         # pastikan decode ke string
+#                         decoded = line.decode("utf-8") if isinstance(line, bytes) else line
+#                         yield decoded + "\n"
+
+#         except Exception as e:
+#             error_data = {"error": str(e)}
+#             yield json.dumps(error_data) + "\n"
+
+#     return Response(
+#         stream_with_context(generate()),
+#         content_type='application/json',
+#         headers={
+#             'Cache-Control': 'no-cache',
+#             'Connection': 'keep-alive',
+#             'X-Accel-Buffering': 'no'
+#         }
+#     )
+
 
 
 if __name__ == "__main__":
